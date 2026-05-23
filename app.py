@@ -40,27 +40,50 @@ if os.path.exists(CONFIG_FILE_PATH):
 
 INTERNAL_API_KEY = (
     os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
+    or os.environ.get("INTERNAL_API_KEY")
     or CFG.get("INTERNAL_API_KEY")
+    or os.environ.get("SPIDERSYN_TOKEN_BOT")
+    or os.environ.get("TOKEN_BOT")
     or CFG.get("TOKEN_BOT")
     or ""
-)
+).strip()
 PANEL_PUBLIC = (
     str(os.environ.get("SPIDERSYN_PANEL_PUBLIC") or CFG.get("PANEL_PUBLIC") or "0").strip().lower()
     in {"1", "true", "yes", "on"}
 )
-app.secret_key = (
+_configured_panel_secret = (
     os.environ.get("SPIDERSYN_PANEL_SECRET")
     or CFG.get("PANEL_SECRET")
-    or CFG.get("TOKEN_BOT")
-    or "spidersyn-panel-secret"
 )
+
+
+def _load_panel_secret() -> str:
+    if _configured_panel_secret:
+        return str(_configured_panel_secret)
+    secret_path = os.path.join(get_data_dir(), "panel_secret.key")
+    try:
+        if os.path.exists(secret_path):
+            with open(secret_path, "r", encoding="utf-8") as f:
+                saved = f.read().strip()
+                if saved:
+                    return saved
+        generated = secrets.token_hex(32)
+        with open(secret_path, "w", encoding="utf-8") as f:
+            f.write(generated)
+        return generated
+    except Exception:
+        return secrets.token_hex(32)
+
+
+app.secret_key = _load_panel_secret()
 PANEL_USER = (os.environ.get("SPIDERSYN_PANEL_USER") or CFG.get("PANEL_USER") or "admin").strip()
 PANEL_PASSWORD = (
     os.environ.get("SPIDERSYN_PANEL_PASSWORD")
     or CFG.get("PANEL_PASSWORD")
-    or str(CFG.get("ADMIN_ID") or "admin123")
+    or ""
 )
 PANEL_LOGIN_ATTEMPTS = {}
+WEB_LOGIN_ATTEMPTS = {}
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = PANEL_PUBLIC
@@ -86,16 +109,43 @@ def _panel_request_allowed() -> bool:
 
 
 def require_internal_access():
-    # Permite llamadas locales del bot/API o, si se despliega separado,
-    # un header explícito compartido entre servicios.
-    if _is_loopback_request():
-        return None
-
     supplied = (request.headers.get("X-Internal-Api-Key") or "").strip()
     if INTERNAL_API_KEY and secrets.compare_digest(supplied, INTERNAL_API_KEY):
         return None
 
+    # Compatibilidad local: solo permite loopback sin header si no hay clave interna configurada.
+    if _is_loopback_request() and not INTERNAL_API_KEY:
+        return None
+
     return jsonify({"status": "error", "message": "Acceso no autorizado"}), 403
+
+
+def _csrf_token() -> str:
+    token = session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
+
+
+def _validate_csrf_token() -> bool:
+    expected = session.get("csrf_token") or ""
+    supplied = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token") or ""
+    return bool(expected and supplied and secrets.compare_digest(expected, supplied))
+
+
+@app.context_processor
+def inject_security_helpers():
+    return {"csrf_token": _csrf_token}
+
+
+@app.before_request
+def enforce_admin_csrf():
+    if request.method != "POST" or not request.path.startswith("/admin/"):
+        return None
+    if not _validate_csrf_token():
+        return jsonify({"status": "error", "message": "CSRF inválido o ausente"}), 400
+    return None
 
 
 @app.before_request
@@ -118,6 +168,35 @@ def request_value(name: str, default=None):
         if name in payload:
             return payload.get(name)
     return request.values.get(name, default)
+
+
+def request_token_value() -> str:
+    auth = (request.headers.get("Authorization") or "").strip()
+    if auth.lower().startswith("bearer "):
+        return auth.split(None, 1)[1].strip()
+    return (
+        request.headers.get("X-Api-Token")
+        or request_value("token")
+        or ""
+    ).strip()
+
+
+def _rate_limited(store: dict, key: str, limit: int, window_seconds: int) -> bool:
+    now_ts = time.time()
+    attempts = [ts for ts in store.get(key, []) if now_ts - ts < window_seconds]
+    store[key] = attempts
+    return len(attempts) >= limit
+
+
+def _record_rate_limit_attempt(store: dict, key: str, window_seconds: int):
+    now_ts = time.time()
+    attempts = [ts for ts in store.get(key, []) if now_ts - ts < window_seconds]
+    attempts.append(now_ts)
+    store[key] = attempts
+
+
+def _clear_rate_limit(store: dict, key: str):
+    store.pop(key, None)
 
 
 def configured_admin_ids() -> set[str]:
@@ -1047,6 +1126,8 @@ def verify_panel_password(password: str) -> bool:
             return check_password_hash(stored_hash, password)
         except Exception:
             return False
+    if not PANEL_PASSWORD:
+        return False
     return secrets.compare_digest(password, PANEL_PASSWORD)
 
 
@@ -3018,9 +3099,9 @@ def info_token_wsp():
         return jsonify({"status": "error", "message": "Token WSP no encontrado para este usuario"}), 404
     return jsonify({"status": "ok", "message": "Token WSP obtenido correctamente", "TOKEN_API_WSP": token}), 200
 
-@app.route("/info_web", methods=["GET"])
+@app.route("/info_web", methods=["GET", "POST"])
 def info_web():
-    token = request.args.get("token")
+    token = request_token_value()
     if not token:
         return jsonify({"status": "error", "message": "Falta el parámetro token"}), 400
     row = get_user_by_web_token(token)
@@ -3041,9 +3122,9 @@ def info_web():
     }
     return jsonify({"status": "ok", "message": "Información WEB obtenida correctamente", "data": data}), 200
 
-@app.route("/info_wsp", methods=["GET"])
+@app.route("/info_wsp", methods=["GET", "POST"])
 def info_wsp():
-    token = request.args.get("token")
+    token = request_token_value()
     if not token:
         return jsonify({"status": "error", "message": "Falta el parámetro token"}), 400
     row = get_user_by_wsp_token(token)
@@ -5817,8 +5898,17 @@ def login_web():
     # Obtener credenciales desde args o form
     user = (request.values.get("user") or "").strip()
     password = (request.values.get("pass") or "").strip()
+    ip = request.remote_addr or "unknown"
+    rate_key = f"{ip}:{user.lower() or 'anonymous'}"
+
+    if _rate_limited(WEB_LOGIN_ATTEMPTS, rate_key, limit=8, window_seconds=900):
+        return jsonify({
+            "status": "error",
+            "message": "Demasiados intentos. Espera 15 minutos."
+        }), 429
 
     if not user or not password:
+        _record_rate_limit_attempt(WEB_LOGIN_ATTEMPTS, rate_key, 900)
         return jsonify({
             "status": "error",
             "message": "Parámetros requeridos: user y pass"
@@ -5836,18 +5926,20 @@ def login_web():
 
     if not row:
         conn.close()
+        _record_rate_limit_attempt(WEB_LOGIN_ATTEMPTS, rate_key, 900)
         return jsonify({
             "status": "error",
-            "message": "Usuario WEB no encontrado"
-        }), 404
+            "message": "Credenciales inválidas"
+        }), 401
 
     # Verificar que tenga WEB activado
     if not bool(row["register_web"]):
         conn.close()
+        _record_rate_limit_attempt(WEB_LOGIN_ATTEMPTS, rate_key, 900)
         return jsonify({
             "status": "error",
-            "message": "WEB no está activado para este usuario"
-        }), 423
+            "message": "Credenciales inválidas"
+        }), 401
 
     stored_password = row["pass_web"] or ""
     password_ok = False
@@ -5858,6 +5950,7 @@ def login_web():
 
     if not password_ok:
         conn.close()
+        _record_rate_limit_attempt(WEB_LOGIN_ATTEMPTS, rate_key, 900)
         return jsonify({
             "status": "error",
             "message": "Credenciales inválidas"
@@ -5874,6 +5967,7 @@ def login_web():
         )
         conn.commit()
         created = True
+    _clear_rate_limit(WEB_LOGIN_ATTEMPTS, rate_key)
 
     # Respuesta OK con datos útiles
     payload = {

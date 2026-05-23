@@ -1856,6 +1856,16 @@
   </div>
 </body>
 <script>
+    const csrfToken = "{{ csrf_token() }}";
+    document.querySelectorAll('form[method="post"], form[method="POST"]').forEach((form) => {
+      if (!form.querySelector('input[name="csrf_token"]')) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'csrf_token';
+        input.value = csrfToken;
+        form.appendChild(input);
+      }
+    });
     const storedTheme = localStorage.getItem('nexora-panel-theme') || localStorage.getItem('spidersyn-panel-theme');
     if (storedTheme === 'dark') document.body.classList.add('dark');
   function toggleTheme() {
