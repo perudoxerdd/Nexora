@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import sqlite3
@@ -79,6 +80,16 @@ def fetch_api_json(path: str, timeout: int = 20, method: str = "GET", payload: d
     if not url:
         return 500, {"status": "error", "message": "API_BASE no configurada"}
     return _fetch_json(url, timeout=timeout, method=method, payload=payload)
+
+
+async def fetch_api_json_async(path: str, timeout: int = 20, method: str = "GET", payload: dict | None = None):
+    return await asyncio.to_thread(
+        fetch_api_json,
+        path,
+        timeout=timeout,
+        method=method,
+        payload=payload,
+    )
 
 
 def verificar_usuario(id_tg: str):
