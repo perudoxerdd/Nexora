@@ -24,7 +24,8 @@ try:
 except Exception:
     CFG = {}
 API_BASE = (
-    os.environ.get("SPIDERSYN_API_BASE")
+    os.environ.get("NEXORA_API_BASE")
+    or os.environ.get("SPIDERSYN_API_BASE")
     or os.environ.get("API_BASE")
     or os.environ.get("API_DB_BASE")
     or CFG.get("API_DB_BASE")
@@ -32,7 +33,8 @@ API_BASE = (
     or ""
 ).rstrip("/")
 INTERNAL_API_KEY = (
-    os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
+    os.environ.get("NEXORA_INTERNAL_API_KEY")
+    or os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
     or os.environ.get("INTERNAL_API_KEY")
     or CFG.get("INTERNAL_API_KEY")
     or CFG.get("TOKEN_BOT")
@@ -147,6 +149,7 @@ def _bot_brand(cfg: dict) -> str:
     raw = (
         settings.get("BOT_NAME")
         or settings.get("NAME")
+        or os.environ.get("NEXORA_BOT_NAME")
         or os.environ.get("SPIDERSYN_BOT_NAME")
         or cfg.get("BOT_NAME")
         or cfg.get("NAME")

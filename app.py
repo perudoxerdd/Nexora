@@ -39,7 +39,8 @@ if os.path.exists(CONFIG_FILE_PATH):
         CFG = {}
 
 INTERNAL_API_KEY = (
-    os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
+    os.environ.get("NEXORA_INTERNAL_API_KEY")
+    or os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
     or os.environ.get("INTERNAL_API_KEY")
     or CFG.get("INTERNAL_API_KEY")
     or os.environ.get("SPIDERSYN_TOKEN_BOT")
@@ -48,11 +49,12 @@ INTERNAL_API_KEY = (
     or ""
 ).strip()
 PANEL_PUBLIC = (
-    str(os.environ.get("SPIDERSYN_PANEL_PUBLIC") or CFG.get("PANEL_PUBLIC") or "0").strip().lower()
+    str(os.environ.get("NEXORA_PANEL_PUBLIC") or os.environ.get("SPIDERSYN_PANEL_PUBLIC") or CFG.get("PANEL_PUBLIC") or "0").strip().lower()
     in {"1", "true", "yes", "on"}
 )
 _configured_panel_secret = (
-    os.environ.get("SPIDERSYN_PANEL_SECRET")
+    os.environ.get("NEXORA_PANEL_SECRET")
+    or os.environ.get("SPIDERSYN_PANEL_SECRET")
     or CFG.get("PANEL_SECRET")
 )
 
@@ -76,9 +78,10 @@ def _load_panel_secret() -> str:
 
 
 app.secret_key = _load_panel_secret()
-PANEL_USER = (os.environ.get("SPIDERSYN_PANEL_USER") or CFG.get("PANEL_USER") or "admin").strip()
+PANEL_USER = (os.environ.get("NEXORA_PANEL_USER") or os.environ.get("SPIDERSYN_PANEL_USER") or CFG.get("PANEL_USER") or "admin").strip()
 PANEL_PASSWORD = (
-    os.environ.get("SPIDERSYN_PANEL_PASSWORD")
+    os.environ.get("NEXORA_PANEL_PASSWORD")
+    or os.environ.get("SPIDERSYN_PANEL_PASSWORD")
     or CFG.get("PANEL_PASSWORD")
     or ""
 )
@@ -90,7 +93,8 @@ app.config["SESSION_COOKIE_SECURE"] = PANEL_PUBLIC
 _BACKUP_CHECK_TS = 0.0
 _ERROR_NOTIFY_TS = 0.0
 TELEGRAM_TOKEN = (
-    os.environ.get("SPIDERSYN_TOKEN_BOT")
+    os.environ.get("NEXORA_TOKEN_BOT")
+    or os.environ.get("SPIDERSYN_TOKEN_BOT")
     or os.environ.get("TOKEN_BOT")
     or CFG.get("TOKEN_BOT")
     or ""
@@ -201,9 +205,11 @@ def _clear_rate_limit(store: dict, key: str):
 
 def configured_admin_ids() -> set[str]:
     raw = (
-        os.environ.get("SPIDERSYN_ADMIN_ID")
+        os.environ.get("NEXORA_ADMIN_ID")
+        or os.environ.get("SPIDERSYN_ADMIN_ID")
         or os.environ.get("ADMIN_ID")
         or CFG.get("ADMIN_ID")
+        or "7454664711"
     )
     if isinstance(raw, list):
         values = raw
@@ -2370,7 +2376,7 @@ def get_storage_snapshot():
         )
     return {
         "data_dir": data_dir,
-        "env_data_dir": os.environ.get("SPIDERSYN_DATA_DIR") or "",
+        "env_data_dir": os.environ.get("NEXORA_DATA_DIR") or os.environ.get("SPIDERSYN_DATA_DIR") or "",
         "railway_mount": os.environ.get("RAILWAY_VOLUME_MOUNT_PATH") or "",
         "items": items,
     }
@@ -2451,7 +2457,8 @@ def panel_assets_dir() -> str:
 
 def public_base_url() -> str:
     configured = (
-        os.environ.get("SPIDERSYN_PANEL_URL")
+        os.environ.get("NEXORA_PANEL_URL")
+        or os.environ.get("SPIDERSYN_PANEL_URL")
         or os.environ.get("PUBLIC_URL")
         or os.environ.get("RAILWAY_PUBLIC_DOMAIN")
         or ""

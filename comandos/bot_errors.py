@@ -9,7 +9,7 @@ def api_error_text(action: str, status: int, data=None) -> str:
         hint = "Revisa que el servicio web esté Online y que API_BASE apunte al dominio correcto."
     elif status in {401, 403}:
         title = "La API rechazó la solicitud."
-        hint = "Revisa que SPIDERSYN_INTERNAL_API_KEY sea igual en web y worker."
+        hint = "Revisa que NEXORA_INTERNAL_API_KEY sea igual en web y worker."
     elif status == 404:
         title = "La ruta no existe en la API."
         hint = "Puede faltar deploy o el worker está llamando un endpoint viejo."

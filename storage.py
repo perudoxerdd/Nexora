@@ -6,7 +6,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def get_data_dir() -> str:
     data_dir = (
-        os.environ.get("SPIDERSYN_DATA_DIR")
+        os.environ.get("NEXORA_DATA_DIR")
+        or os.environ.get("SPIDERSYN_DATA_DIR")
         or os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
         or BASE_DIR
     )

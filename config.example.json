@@ -1,14 +1,16 @@
 {
   "TOKEN_BOT": "set-in-railway",
   "API_BASE": "https://your-web-service.up.railway.app",
-  "ADMIN_ID": "123456789",
+  "ADMIN_ID": "7454664711",
   "INTERNAL_API_KEY": "set-in-railway",
   "PANEL_USER": "admin",
   "PANEL_PASSWORD": "set-in-railway",
   "PANEL_SECRET": "set-in-railway",
   "PANEL_PUBLIC": true,
-  "SPIDERSYN_DATA_DIR": "/data",
-  "BOT_NAME": "SpiderSyn",
+  "NEXORA_DATA_DIR": "/data",
+  "BOT_NAME": "#NEXORA ⇒",
+  "BT_OWNER": "@PeruDoxer",
+  "OWNER_LINK": "https://t.me/PeruDoxer",
   "CMDS": {},
   "ERRORCONSULTA": {}
 }

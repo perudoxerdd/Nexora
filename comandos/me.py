@@ -30,9 +30,11 @@ if os.path.exists(CONFIG_FILE_PATH):
         cfg = {}
 
 _admin_raw = (
-    os.environ.get("SPIDERSYN_ADMIN_ID")
+    os.environ.get("NEXORA_ADMIN_ID")
+    or os.environ.get("SPIDERSYN_ADMIN_ID")
     or os.environ.get("ADMIN_ID")
     or cfg.get("ADMIN_ID")
+    or "7454664711"
 )
 if isinstance(_admin_raw, list):
     _admin_values = _admin_raw
@@ -101,6 +103,7 @@ def _bot_brand() -> str:
     raw = (
         settings.get("BOT_NAME")
         or settings.get("NAME")
+        or os.environ.get("NEXORA_BOT_NAME")
         or os.environ.get("SPIDERSYN_BOT_NAME")
         or BOT_NAME
         or cfg.get("BOT_NAME")

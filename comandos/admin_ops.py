@@ -23,7 +23,8 @@ except Exception:
     CFG = {}
 
 API_BASE = (
-    os.environ.get("SPIDERSYN_API_BASE")
+    os.environ.get("NEXORA_API_BASE")
+    or os.environ.get("SPIDERSYN_API_BASE")
     or os.environ.get("API_BASE")
     or os.environ.get("API_DB_BASE")
     or CFG.get("API_DB_BASE")
@@ -31,7 +32,8 @@ API_BASE = (
     or ""
 ).rstrip("/")
 INTERNAL_API_KEY = (
-    os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
+    os.environ.get("NEXORA_INTERNAL_API_KEY")
+    or os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
     or os.environ.get("INTERNAL_API_KEY")
     or CFG.get("INTERNAL_API_KEY")
     or CFG.get("TOKEN_BOT")
@@ -46,7 +48,7 @@ TGINFO_ENDPOINT = f"{API_BASE}/tg_info"
 COMPRAS_ENDPOINT = f"{API_BASE}/compras"
 ANTISPAM_ENDPOINT = f"{API_BASE}/antispam"
 
-_admin_raw = os.environ.get("SPIDERSYN_ADMIN_ID") or os.environ.get("ADMIN_ID") or CFG.get("ADMIN_ID")
+_admin_raw = os.environ.get("NEXORA_ADMIN_ID") or os.environ.get("SPIDERSYN_ADMIN_ID") or os.environ.get("ADMIN_ID") or CFG.get("ADMIN_ID") or "7454664711"
 if isinstance(_admin_raw, list):
     _admin_values = _admin_raw
 elif _admin_raw is None:
@@ -87,6 +89,7 @@ def _bot_brand() -> str:
     raw = (
         settings.get("BOT_NAME")
         or settings.get("NAME")
+        or os.environ.get("NEXORA_BOT_NAME")
         or os.environ.get("SPIDERSYN_BOT_NAME")
         or CFG.get("BOT_NAME")
         or CFG.get("NAME")

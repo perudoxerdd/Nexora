@@ -20,7 +20,8 @@ except Exception:
     CFG = {}
 
 API_BASE = (
-    os.environ.get("SPIDERSYN_API_BASE")
+    os.environ.get("NEXORA_API_BASE")
+    or os.environ.get("SPIDERSYN_API_BASE")
     or os.environ.get("API_BASE")
     or os.environ.get("API_DB_BASE")
     or CFG.get("API_DB_BASE")
@@ -28,19 +29,21 @@ API_BASE = (
     or ""
 ).rstrip("/")
 PANEL_URL = (
-    os.environ.get("SPIDERSYN_PANEL_URL")
+    os.environ.get("NEXORA_PANEL_URL")
+    or os.environ.get("SPIDERSYN_PANEL_URL")
     or CFG.get("PANEL_URL")
     or (f"{API_BASE}/admin/panel" if API_BASE else "")
 ).rstrip("/")
 INTERNAL_API_KEY = (
-    os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
+    os.environ.get("NEXORA_INTERNAL_API_KEY")
+    or os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
     or os.environ.get("INTERNAL_API_KEY")
     or CFG.get("INTERNAL_API_KEY")
     or CFG.get("TOKEN_BOT")
     or ""
 ).strip()
 
-_admin_raw = os.environ.get("SPIDERSYN_ADMIN_ID") or os.environ.get("ADMIN_ID") or CFG.get("ADMIN_ID")
+_admin_raw = os.environ.get("NEXORA_ADMIN_ID") or os.environ.get("SPIDERSYN_ADMIN_ID") or os.environ.get("ADMIN_ID") or CFG.get("ADMIN_ID") or "7454664711"
 if isinstance(_admin_raw, list):
     _admin_values = _admin_raw
 elif _admin_raw is None:

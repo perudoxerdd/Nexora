@@ -22,7 +22,7 @@ except Exception:
 CMDS = CFG.get("CMDS", {}) or {}
 ERRS = CFG.get("ERRORCONSULTA", {}) or {}
 
-_admin_raw = os.environ.get("SPIDERSYN_ADMIN_ID") or os.environ.get("ADMIN_ID") or CFG.get("ADMIN_ID")
+_admin_raw = os.environ.get("NEXORA_ADMIN_ID") or os.environ.get("SPIDERSYN_ADMIN_ID") or os.environ.get("ADMIN_ID") or CFG.get("ADMIN_ID") or "7454664711"
 if isinstance(_admin_raw, list):
     _admin_values = _admin_raw
 elif _admin_raw is None:

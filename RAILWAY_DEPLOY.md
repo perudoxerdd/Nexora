@@ -19,19 +19,20 @@ Usa dos servicios desde el mismo repo:
 Pon estas variables en ambos servicios:
 
 ```text
-SPIDERSYN_INTERNAL_API_KEY=pon_un_secret_largo
-SPIDERSYN_PANEL_SECRET=pon_otro_secret_largo
-SPIDERSYN_PANEL_USER=admin
-SPIDERSYN_PANEL_PASSWORD=una_clave_larga
-SPIDERSYN_PANEL_PUBLIC=true
-ADMIN_ID=tu_id_de_telegram
+NEXORA_INTERNAL_API_KEY=pon_un_secret_largo
+NEXORA_PANEL_SECRET=pon_otro_secret_largo
+NEXORA_PANEL_USER=admin
+NEXORA_PANEL_PASSWORD=una_clave_larga
+NEXORA_PANEL_PUBLIC=true
+NEXORA_ADMIN_ID=7454664711
+NEXORA_BOT_NAME=#NEXORA ⇒
 TOKEN_BOT=tu_token_del_bot
 ```
 
 Si usas SQLite en Railway, crea un Volume y monta el servicio en una ruta fija. Luego agrega:
 
 ```text
-SPIDERSYN_DATA_DIR=/data
+NEXORA_DATA_DIR=/data
 ```
 
 Con esa variable, las bases `multiplataforma.db`, `historial.db`, `compras.db`, `keys.db` y `requests.db` se guardan en `/data`.
@@ -45,13 +46,14 @@ PORT=Railway lo asigna solo
 Solo en `worker`:
 
 ```text
-API_BASE=https://tu-servicio-web.up.railway.app
+NEXORA_API_BASE=https://tu-servicio-web.up.railway.app
 ```
 
 **Notas**
 
-- `API_BASE` del worker debe apuntar al dominio público del servicio `web`.
-- Para no perder SQLite en redeploy, `SPIDERSYN_DATA_DIR` debe apuntar a un Railway Volume.
+- `NEXORA_API_BASE` del worker debe apuntar al dominio público del servicio `web`.
+- Para no perder SQLite en redeploy, `NEXORA_DATA_DIR` debe apuntar a un Railway Volume.
+- Los nombres viejos `SPIDERSYN_*` siguen funcionando como compatibilidad, pero para el repo nuevo usa `NEXORA_*`.
 - Si `web` y `worker` corren separados, SQLite no es ideal para datos compartidos entre ambos servicios. Para producción estable, migra a PostgreSQL/MySQL o mueve las escrituras del worker a endpoints del `web`.
 - No dependas de `config.json` en producción para secretos.
 - Si mantienes `config.json`, úsalo solo como respaldo local.

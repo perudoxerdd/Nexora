@@ -59,14 +59,17 @@ if os.path.exists(CONFIG_FILE_PATH):
         print(f"Advertencia: no se pudo cargar '{CONFIG_FILE_PATH}': {e}")
 
 TELEGRAM_TOKEN = (
-    os.environ.get("SPIDERSYN_TOKEN_BOT")
+    os.environ.get("NEXORA_TOKEN_BOT")
+    or os.environ.get("SPIDERSYN_TOKEN_BOT")
     or os.environ.get("TOKEN_BOT")
     or config_data.get("TOKEN_BOT")
 )
 admin_raw = (
-    os.environ.get("SPIDERSYN_ADMIN_ID")
+    os.environ.get("NEXORA_ADMIN_ID")
+    or os.environ.get("SPIDERSYN_ADMIN_ID")
     or os.environ.get("ADMIN_ID")
     or config_data.get("ADMIN_ID")
+    or "7454664711"
 )
 try:
     ADMIN_ID = int(admin_raw) if admin_raw is not None else None
@@ -74,7 +77,8 @@ except Exception:
     ADMIN_ID = None
 
 API_DB_BASE = (
-    os.environ.get("SPIDERSYN_API_BASE")
+    os.environ.get("NEXORA_API_BASE")
+    or os.environ.get("SPIDERSYN_API_BASE")
     or os.environ.get("API_BASE")
     or os.environ.get("API_DB_BASE")
     or config_data.get('API_DB_BASE')
@@ -83,7 +87,8 @@ API_DB_BASE = (
 ).rstrip("/")
 
 INTERNAL_API_KEY = (
-    os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
+    os.environ.get("NEXORA_INTERNAL_API_KEY")
+    or os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
     or os.environ.get("INTERNAL_API_KEY")
     or config_data.get("INTERNAL_API_KEY")
     or config_data.get("TOKEN_BOT")
