@@ -2,25 +2,21 @@ import os
 import json
 import html
 import sqlite3
-import json as jsonlib
 import time
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from typing import Optional, Tuple
-from urllib import request as _urlreq
-from urllib.error import HTTPError, URLError
 
 from telegram import Update
 from telegram.ext import ContextTypes
 from storage import db_path
+from comandos.utils import API_BASE, fetch_api_json, fetch_api_json_async
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE_PATH = os.path.join(BASE_DIR, "config.json")
 DB_PATH = db_path("multiplataforma.db")
 
 BOT_NAME = ""
-API_BASE = ""
-INTERNAL_API_KEY = ""
 cfg = {}
 _SETTINGS_CACHE = {"ts": 0.0, "data": None}
 
@@ -32,22 +28,6 @@ if os.path.exists(CONFIG_FILE_PATH):
     except Exception:
         BOT_NAME = ""
         cfg = {}
-
-API_BASE = (
-    os.environ.get("SPIDERSYN_API_BASE")
-    or os.environ.get("API_BASE")
-    or os.environ.get("API_DB_BASE")
-    or cfg.get("API_DB_BASE")
-    or cfg.get("API_BASE")
-    or ""
-).rstrip("/")
-INTERNAL_API_KEY = (
-    os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
-    or os.environ.get("INTERNAL_API_KEY")
-    or cfg.get("INTERNAL_API_KEY")
-    or cfg.get("TOKEN_BOT")
-    or ""
-).strip()
 
 _admin_raw = (
     os.environ.get("SPIDERSYN_ADMIN_ID")
@@ -101,39 +81,13 @@ def _days_left(exp_iso: Optional[str]) -> Tuple[str, bool, Optional[int]]:
     return (f"{days} día(s)", True, days)
 
 
-def _fetch_json(url: str, timeout: int = 15):
-    headers = {"User-Agent": "NexoraBot/1.0"}
-    if INTERNAL_API_KEY:
-        headers["X-Internal-Api-Key"] = INTERNAL_API_KEY
-    req = _urlreq.Request(url, headers=headers)
-    try:
-        with _urlreq.urlopen(req, timeout=timeout) as resp:
-            status = resp.getcode() or 200
-            data = resp.read().decode("utf-8", errors="replace")
-            try:
-                return status, jsonlib.loads(data)
-            except Exception:
-                return status, {"status": "error", "message": data}
-    except HTTPError as e:
-        try:
-            body = e.read().decode("utf-8", errors="replace")
-            data = jsonlib.loads(body)
-        except Exception:
-            data = {"status": "error", "message": str(e)}
-        return e.code, data
-    except URLError as e:
-        return 599, {"status": "error", "message": str(e)}
-    except Exception as e:
-        return 500, {"status": "error", "message": str(e)}
-
-
 def _get_remote_settings() -> dict:
     now = time.monotonic()
     if _SETTINGS_CACHE["data"] is not None and now - float(_SETTINGS_CACHE["ts"]) < 30:
         return _SETTINGS_CACHE["data"]
     if not API_BASE:
         return {}
-    st, js = _fetch_json(f"{API_BASE}/bot_catalog", timeout=12)
+    st, js = fetch_api_json("/bot_catalog", timeout=12)
     if st == 200 and js.get("status") == "ok":
         data = ((js.get("data") or {}).get("settings") or {})
         _SETTINGS_CACHE["ts"] = now
@@ -189,7 +143,7 @@ async def me_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    s1, j1 = _fetch_json(f"{API_BASE}/tg_info?ID_TG={target_id}")
+    s1, j1 = await fetch_api_json_async(f"/tg_info?ID_TG={target_id}")
     if s1 == 404:
         await msg.reply_text(
             "⚠️ Usuario no encontrado en la base. Usa /register primero.",
@@ -221,7 +175,7 @@ async def me_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         rol_tg = "FUNDADOR"
     exp = data.get("FECHA DE CADUCIDAD")
 
-    s2, j2 = _fetch_json(f"{API_BASE}/historial_id?ID_TG={target_id}")
+    s2, j2 = await fetch_api_json_async(f"/historial_id?ID_TG={target_id}")
     total_consultas = 0
     hoy_consultas = 0
 

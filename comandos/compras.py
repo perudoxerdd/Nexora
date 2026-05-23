@@ -6,11 +6,10 @@ import time
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from urllib import parse as _urlparse
-from urllib import request as _urlreq
-from urllib.error import HTTPError, URLError
 
 from telegram import Update, InputFile
 from telegram.ext import ContextTypes
+from comandos.utils import API_BASE, fetch_api_json, fetch_api_json_async
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE_PATH = os.path.join(BASE_DIR, "config.json")
@@ -24,22 +23,6 @@ except Exception:
     CFG = {}
 
 BOT_NAME = (os.environ.get("SPIDERSYN_BOT_NAME") or CFG.get("BOT_NAME") or CFG.get("NAME") or "").strip() or "#BOT"
-API_BASE = (
-    os.environ.get("SPIDERSYN_API_BASE")
-    or os.environ.get("API_BASE")
-    or os.environ.get("API_DB_BASE")
-    or CFG.get("API_DB_BASE")
-    or CFG.get("API_BASE")
-    or ""
-).rstrip("/")
-INTERNAL_API_KEY = (
-    os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
-    or os.environ.get("INTERNAL_API_KEY")
-    or CFG.get("INTERNAL_API_KEY")
-    or CFG.get("TOKEN_BOT")
-    or ""
-).strip()
-
 _admin_raw = os.environ.get("SPIDERSYN_ADMIN_ID") or os.environ.get("ADMIN_ID") or CFG.get("ADMIN_ID")
 if isinstance(_admin_raw, list):
     _admin_values = _admin_raw
@@ -49,34 +32,6 @@ else:
     _admin_values = str(_admin_raw).replace(",", " ").split()
 ADMIN_IDS = {int(x) for x in _admin_values if str(x).strip().isdigit()}
 _SETTINGS_CACHE = {"ts": 0.0, "data": None}
-
-
-def _fetch_json(url: str, timeout: int = 20):
-    headers = {"User-Agent": "NexoraBot/1.0"}
-    if INTERNAL_API_KEY:
-        headers["X-Internal-Api-Key"] = INTERNAL_API_KEY
-    req = _urlreq.Request(url, headers=headers)
-    try:
-        with _urlreq.urlopen(req, timeout=timeout) as resp:
-            st = resp.getcode() or 200
-            body = resp.read().decode("utf-8", errors="replace")
-            try:
-                import json as _j
-                return st, _j.loads(body)
-            except Exception:
-                return st, {"status": "error", "message": body}
-    except HTTPError as e:
-        try:
-            body = e.read().decode("utf-8", errors="replace")
-            import json as _j
-            data = _j.loads(body)
-        except Exception:
-            data = {"status": "error", "message": str(e)}
-        return e.code, data
-    except URLError as e:
-        return 599, {"status": "error", "message": str(e)}
-    except Exception as e:
-        return 500, {"status": "error", "message": str(e)}
 
 
 def _to_lima(iso: str | None) -> str:
@@ -139,7 +94,11 @@ _ALLOWED_ROLES = {"FUNDADOR", "CO-FUNDADOR", "SELLER"}
 
 
 def _get_user_info(id_tg: str):
-    return _fetch_json(f"{API_BASE}/tg_info?ID_TG={_urlparse.quote(id_tg)}")
+    return fetch_api_json(f"/tg_info?ID_TG={_urlparse.quote(id_tg)}")
+
+
+async def _get_user_info_async(id_tg: str):
+    return await fetch_api_json_async(f"/tg_info?ID_TG={_urlparse.quote(id_tg)}")
 
 
 def _get_remote_settings() -> dict:
@@ -148,7 +107,7 @@ def _get_remote_settings() -> dict:
         return _SETTINGS_CACHE["data"]
     if not API_BASE:
         return {}
-    st, js = _fetch_json(f"{API_BASE}/bot_catalog", timeout=12)
+    st, js = fetch_api_json("/bot_catalog", timeout=12)
     if st == 200 and js.get("status") == "ok":
         data = ((js.get("data") or {}).get("settings") or {})
         _SETTINGS_CACHE["ts"] = now
@@ -323,7 +282,7 @@ async def compras_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
     if viewing_third_party:
-        st_view, js_view = _get_user_info(caller_id)
+        st_view, js_view = await _get_user_info_async(caller_id)
         if st_view != 200:
             await msg.reply_text(
                 f"⚠️ No se pudo validar tu rol (code {st_view}).",
@@ -337,7 +296,7 @@ async def compras_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-    st_c, js_c = _fetch_json(f"{API_BASE}/compras_id?ID_TG={_urlparse.quote(target_id)}")
+    st_c, js_c = await fetch_api_json_async(f"/compras_id?ID_TG={_urlparse.quote(target_id)}")
     if st_c != 200:
         detalle = html.escape(str(js_c.get("message", "Error desconocido")))
         await msg.reply_text(

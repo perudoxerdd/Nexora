@@ -2,12 +2,11 @@ import html
 import json
 import os
 from urllib import parse as _urlparse
-from urllib import request as _urlreq
-from urllib.error import HTTPError, URLError
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 from comandos.bot_errors import api_error_text
+from comandos.utils import fetch_api_json, fetch_api_json_async
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE_PATH = os.path.join(BASE_DIR, "config.json")
@@ -19,22 +18,6 @@ try:
             CFG = json.load(f) or {}
 except Exception:
     CFG = {}
-
-API_BASE = (
-    os.environ.get("SPIDERSYN_API_BASE")
-    or os.environ.get("API_BASE")
-    or os.environ.get("API_DB_BASE")
-    or CFG.get("API_DB_BASE")
-    or CFG.get("API_BASE")
-    or ""
-).rstrip("/")
-INTERNAL_API_KEY = (
-    os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
-    or os.environ.get("INTERNAL_API_KEY")
-    or CFG.get("INTERNAL_API_KEY")
-    or CFG.get("TOKEN_BOT")
-    or ""
-).strip()
 
 _admin_raw = os.environ.get("SPIDERSYN_ADMIN_ID") or os.environ.get("ADMIN_ID") or CFG.get("ADMIN_ID")
 if isinstance(_admin_raw, list):
@@ -51,29 +34,11 @@ def _is_admin(user_id: int) -> bool:
 
 
 def _api(path: str, timeout: int = 18, method: str = "GET", payload: dict | None = None):
-    if not API_BASE:
-        return 599, {"status": "error", "message": "API_BASE no está configurado"}
-    headers = {"User-Agent": "NexoraBot/1.0"}
-    data = None
-    if INTERNAL_API_KEY:
-        headers["X-Internal-Api-Key"] = INTERNAL_API_KEY
-    if payload is not None:
-        headers["Content-Type"] = "application/json"
-        data = json.dumps(payload).encode("utf-8")
-    req = _urlreq.Request(f"{API_BASE}{path}", headers=headers, data=data, method=method)
-    try:
-        with _urlreq.urlopen(req, timeout=timeout) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
-            return resp.getcode() or 200, json.loads(body)
-    except HTTPError as e:
-        try:
-            return e.code, json.loads(e.read().decode("utf-8", errors="replace"))
-        except Exception:
-            return e.code, {"status": "error", "message": str(e)}
-    except URLError as e:
-        return 599, {"status": "error", "message": str(e)}
-    except Exception as e:
-        return 500, {"status": "error", "message": str(e)}
+    return fetch_api_json(path, timeout=timeout, method=method, payload=payload)
+
+
+async def _api_async(path: str, timeout: int = 18, method: str = "GET", payload: dict | None = None):
+    return await fetch_api_json_async(path, timeout=timeout, method=method, payload=payload)
 
 
 def _need_admin(update: Update) -> bool:
@@ -149,7 +114,7 @@ async def admin_tools_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.answer("Cancelado.")
         await query.edit_message_text("Acción cancelada.")
         return
-    st, data = _api("/internal/admin/user-action", method="POST", payload={"ID_TG": target, "action": action})
+    st, data = await _api_async("/internal/admin/user-action", method="POST", payload={"ID_TG": target, "action": action})
     if st == 200 and (data or {}).get("status") == "ok":
         await query.answer("Actualizado.")
         await query.edit_message_text(f"Usuario {target} actualizado: {(data or {}).get('estado')}.")
@@ -167,7 +132,7 @@ async def user_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text("Uso: /user ID", reply_to_message_id=msg.message_id)
         return
     target = str(context.args[0])
-    st, data = _api(f"/internal/admin/user?ID_TG={_urlparse.quote(target)}")
+    st, data = await _api_async(f"/internal/admin/user?ID_TG={_urlparse.quote(target)}")
     if st != 200 or (data or {}).get("status") != "ok":
         await msg.reply_text(_err(st, data), parse_mode="HTML", reply_to_message_id=msg.message_id)
         return
@@ -192,7 +157,7 @@ async def ventas_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not msg or not _need_admin(update):
         await msg.reply_text("No tienes permisos para usar /ventas.")
         return
-    st, data = _api("/internal/admin/sales-summary")
+    st, data = await _api_async("/internal/admin/sales-summary")
     if st != 200 or (data or {}).get("status") != "ok":
         await msg.reply_text(_err(st, data), parse_mode="HTML", reply_to_message_id=msg.message_id)
         return
@@ -212,7 +177,7 @@ async def errores_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not msg or not _need_admin(update):
         await msg.reply_text("No tienes permisos para usar /errores.")
         return
-    st, data = _api("/internal/admin/errors?limit=10")
+    st, data = await _api_async("/internal/admin/errors?limit=10")
     if st != 200 or (data or {}).get("status") != "ok":
         await msg.reply_text(_err(st, data), parse_mode="HTML", reply_to_message_id=msg.message_id)
         return

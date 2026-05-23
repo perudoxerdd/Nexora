@@ -3,12 +3,11 @@ import html
 import json
 import os
 from urllib import parse as _urlparse
-from urllib import request as _urlreq
-from urllib.error import HTTPError, URLError
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest, Forbidden, RetryAfter, TimedOut
 from telegram.ext import ContextTypes
+from comandos.utils import API_BASE, fetch_api_json_async
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE_PATH = os.path.join(BASE_DIR, "config.json")
@@ -20,22 +19,6 @@ try:
             CFG = json.load(f) or {}
 except Exception:
     CFG = {}
-
-API_BASE = (
-    os.environ.get("SPIDERSYN_API_BASE")
-    or os.environ.get("API_BASE")
-    or os.environ.get("API_DB_BASE")
-    or CFG.get("API_DB_BASE")
-    or CFG.get("API_BASE")
-    or ""
-).rstrip("/")
-INTERNAL_API_KEY = (
-    os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
-    or os.environ.get("INTERNAL_API_KEY")
-    or CFG.get("INTERNAL_API_KEY")
-    or CFG.get("TOKEN_BOT")
-    or ""
-).strip()
 
 _admin_raw = os.environ.get("SPIDERSYN_ADMIN_ID") or os.environ.get("ADMIN_ID") or CFG.get("ADMIN_ID")
 if isinstance(_admin_raw, list):
@@ -50,30 +33,6 @@ BROADCAST_TTL_SECONDS = 900
 
 def _is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
-
-
-def _fetch_json(url: str, timeout: int = 20):
-    headers = {"User-Agent": "NexoraBot/1.0"}
-    if INTERNAL_API_KEY:
-        headers["X-Internal-Api-Key"] = INTERNAL_API_KEY
-    req = _urlreq.Request(url, headers=headers)
-    try:
-        with _urlreq.urlopen(req, timeout=timeout) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
-            try:
-                return resp.getcode() or 200, json.loads(body)
-            except Exception:
-                return resp.getcode() or 200, {"status": "error", "message": body}
-    except HTTPError as e:
-        try:
-            body = e.read().decode("utf-8", errors="replace")
-            return e.code, json.loads(body)
-        except Exception:
-            return e.code, {"status": "error", "message": str(e)}
-    except URLError as e:
-        return 599, {"status": "error", "message": str(e)}
-    except Exception as e:
-        return 500, {"status": "error", "message": str(e)}
 
 
 def _usage() -> str:
@@ -103,11 +62,10 @@ def _parse_scope_and_text(raw_text: str) -> tuple[str, str]:
     return scope, text
 
 
-def _target_ids(scope: str) -> tuple[list[int], str | None]:
+async def _target_ids(scope: str) -> tuple[list[int], str | None]:
     if not API_BASE:
         return [], "API_BASE no está configurado."
-    url = f"{API_BASE}/internal/broadcast/users?scope={_urlparse.quote(scope)}"
-    status, data = _fetch_json(url, timeout=25)
+    status, data = await fetch_api_json_async(f"/internal/broadcast/users?scope={_urlparse.quote(scope)}", timeout=25)
     if status != 200 or (data or {}).get("status") != "ok":
         return [], f"No se pudo cargar usuarios. Código {status}: {(data or {}).get('message', 'error')}"
     users = []
@@ -168,7 +126,7 @@ async def global_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text(_usage(), parse_mode="HTML", reply_to_message_id=msg.message_id)
         return
 
-    users, error = _target_ids(scope)
+    users, error = await _target_ids(scope)
     if error:
         await msg.reply_text(error, reply_to_message_id=msg.message_id)
         return
