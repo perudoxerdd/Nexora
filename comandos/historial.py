@@ -7,15 +7,12 @@ import time
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from urllib import parse as _urlparse
-from urllib import request as _urlreq
-from urllib.error import HTTPError, URLError
 
 from telegram import Update, InputFile
 from telegram.ext import ContextTypes
+from comandos.utils import API_BASE as API_DB_BASE, fetch_api_json, fetch_api_json_async
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-API_DB_BASE = "http://127.0.0.1:4764"   # tg_info, historial_id
-INTERNAL_API_KEY = ""
 CONFIG_FILE_PATH = os.path.join(BASE_DIR, "config.json")
 
 # ================== Carga de config ==================
@@ -27,22 +24,6 @@ try:
 except Exception:
     CFG = {}
 
-API_DB_BASE = (
-    os.environ.get("SPIDERSYN_API_BASE")
-    or os.environ.get("API_BASE")
-    or os.environ.get("API_DB_BASE")
-    or CFG.get("API_DB_BASE")
-    or CFG.get("API_BASE")
-    or API_DB_BASE
-).rstrip("/")
-INTERNAL_API_KEY = (
-    os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
-    or os.environ.get("INTERNAL_API_KEY")
-    or CFG.get("INTERNAL_API_KEY")
-    or CFG.get("TOKEN_BOT")
-    or ""
-).strip()
-
 BOT_NAME = (os.environ.get("SPIDERSYN_BOT_NAME") or CFG.get("BOT_NAME") or CFG.get("NAME") or "").strip() or "#BOT"
 _admin_raw = os.environ.get("SPIDERSYN_ADMIN_ID") or os.environ.get("ADMIN_ID") or CFG.get("ADMIN_ID")
 if isinstance(_admin_raw, list):
@@ -53,32 +34,6 @@ else:
     _admin_values = str(_admin_raw).replace(",", " ").split()
 ADMIN_IDS = {int(x) for x in _admin_values if str(x).strip().isdigit()}
 _SETTINGS_CACHE = {"ts": 0.0, "data": None}
-
-# ================== Utilidades HTTP ==================
-def _fetch_json(url: str, timeout: int = 20):
-    headers = {"User-Agent": "NexoraBot/1.0"}
-    if INTERNAL_API_KEY:
-        headers["X-Internal-Api-Key"] = INTERNAL_API_KEY
-    req = _urlreq.Request(url, headers=headers)
-    try:
-        with _urlreq.urlopen(req, timeout=timeout) as resp:
-            st = resp.getcode() or 200
-            body = resp.read().decode("utf-8", errors="replace")
-            try:
-                import json as _j
-                return st, _j.loads(body)
-            except Exception:
-                return st, {"status": "error", "message": body}
-    except HTTPError as e:
-        try:
-            body = e.read().decode("utf-8", errors="replace")
-            import json as _j
-            data = _j.loads(body)
-        except Exception:
-            data = {"status": "error", "message": str(e)}
-        return e.code, data
-    except URLError as e:
-        return 599, {"status": "error", "message": str(e)}
 
 # ================== Utilidades de tiempo ==================
 def _parse_iso_utc(iso: str | None) -> datetime | None:
@@ -122,8 +77,8 @@ def _clean_counter_key(value: str | None, fallback: str = "OTROS") -> str:
 # ================== Autorización ==================
 _ALLOWED_ROLES = {"FUNDADOR", "CO-FUNDADOR", "SELLER"}
 
-def _get_user_info(id_tg: str):
-    return _fetch_json(f"{API_DB_BASE}/tg_info?ID_TG={_urlparse.quote(id_tg)}")
+async def _get_user_info(id_tg: str):
+    return await fetch_api_json_async(f"/tg_info?ID_TG={_urlparse.quote(id_tg)}")
 
 
 def _get_remote_settings() -> dict:
@@ -132,7 +87,7 @@ def _get_remote_settings() -> dict:
         return _SETTINGS_CACHE["data"]
     if not API_DB_BASE:
         return {}
-    st, js = _fetch_json(f"{API_DB_BASE}/bot_catalog", timeout=12)
+    st, js = fetch_api_json("/bot_catalog", timeout=12)
     if st == 200 and js.get("status") == "ok":
         data = ((js.get("data") or {}).get("settings") or {})
         _SETTINGS_CACHE["ts"] = now
@@ -294,7 +249,7 @@ async def historial_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 3) Si verán tercero, validar permisos del solicitante
     if viewing_third_party:
-        st_view, js_view = _get_user_info(caller_id)
+        st_view, js_view = await _get_user_info(caller_id)
         if st_view != 200:
             await msg.reply_text(
                 f"⚠️ No se pudo validar tu rol (code {st_view}).",
@@ -309,7 +264,7 @@ async def historial_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
     # 4) Obtener historial del target
-    st_h, js_h = _fetch_json(f"{API_DB_BASE}/historial_id?ID_TG={_urlparse.quote(target_id)}")
+    st_h, js_h = await fetch_api_json_async(f"/historial_id?ID_TG={_urlparse.quote(target_id)}")
     if st_h != 200:
         await msg.reply_text(
             f"⚠️ No se pudo obtener el historial (code {st_h}).",
