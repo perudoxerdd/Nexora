@@ -100,6 +100,8 @@ print(f"API base cargada: {API_DB_BASE}")
 # ---------- Anti-spam helpers ----------
 # Memoria del último uso por usuario y comando
 _last_call_ts: dict[tuple[int, str], float] = {}
+_antispam_cache: dict[int, tuple[float, int]] = {}
+ANTISPAM_CACHE_TTL = 30.0
 
 def _fetch_json(url: str, timeout: int = 12):
     headers = {"User-Agent": "NexoraBot/1.0"}
@@ -130,16 +132,21 @@ def _get_antispam_seconds(user_id: int) -> int:
     """
     Lee ANTISPAM desde /tg_info. Fallback: 15s si falla o no viene.
     """
+    now = time.monotonic()
+    cached = _antispam_cache.get(user_id)
+    if cached and now - cached[0] < ANTISPAM_CACHE_TTL:
+        return cached[1]
+
     st, js = _fetch_json(f"{API_DB_BASE}/tg_info?ID_TG={_urlparse.quote(str(user_id))}")
+    antispam = 15
     if st == 200:
         data = (js.get("data") or {})
         try:
-            val = int(data.get("ANTISPAM", 15))
-            return max(0, val)
+            antispam = max(0, int(data.get("ANTISPAM", 15)))
         except Exception:
-            return 15
-    # si no está registrado o falla, aplica 15s por defecto
-    return 15
+            antispam = 15
+    _antispam_cache[user_id] = (now, antispam)
+    return antispam
 
 def anti_spam_guard(handler_coro, cmd_name: str, skip_empty_args: bool = False):
     """
