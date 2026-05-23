@@ -18,8 +18,6 @@ try:
 except Exception:
     CFG = {}
 
-API_BASE = (CFG.get("API_BASE") or "").rstrip("/")
-INTERNAL_API_KEY = (CFG.get("INTERNAL_API_KEY") or CFG.get("TOKEN_BOT") or "").strip()
 API_BASE = (
     os.environ.get("SPIDERSYN_API_BASE")
     or os.environ.get("API_BASE")
@@ -32,9 +30,18 @@ INTERNAL_API_KEY = (
     os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
     or os.environ.get("INTERNAL_API_KEY")
     or CFG.get("INTERNAL_API_KEY")
+    or os.environ.get("SPIDERSYN_TOKEN_BOT")
+    or os.environ.get("TOKEN_BOT")
     or CFG.get("TOKEN_BOT")
     or ""
 ).strip()
+
+
+def api_url(path: str) -> str:
+    if not API_BASE:
+        return ""
+    clean_path = path if path.startswith("/") else f"/{path}"
+    return f"{API_BASE}{clean_path}"
 
 
 def _fetch_json(url: str, timeout: int = 20, method: str = "GET", payload: dict | None = None):
@@ -67,6 +74,13 @@ def _fetch_json(url: str, timeout: int = 20, method: str = "GET", payload: dict 
         return 500, {"status": "error", "message": str(e)}
 
 
+def fetch_api_json(path: str, timeout: int = 20, method: str = "GET", payload: dict | None = None):
+    url = api_url(path)
+    if not url:
+        return 500, {"status": "error", "message": "API_BASE no configurada"}
+    return _fetch_json(url, timeout=timeout, method=method, payload=payload)
+
+
 def verificar_usuario(id_tg: str):
     """
     Devuelve (True, info_usuario) si el usuario existe y está ACTIVO.
@@ -75,7 +89,7 @@ def verificar_usuario(id_tg: str):
     if not API_BASE:
         return False, {}
 
-    st, js = _fetch_json(f"{API_BASE}/tg_info?ID_TG={_urlparse.quote(id_tg)}")
+    st, js = fetch_api_json(f"/tg_info?ID_TG={_urlparse.quote(id_tg)}")
     if st != 200:
         return False, {}
 
@@ -158,8 +172,8 @@ def _normalize_command_plan(value: str | None) -> str:
 
 def get_command_runtime_config(command_slug: str, default_cost: int = 1):
     if API_BASE:
-        st, js = _fetch_json(
-            f"{API_BASE}/command_config?slug={_urlparse.quote(command_slug)}&default_cost={int(default_cost)}",
+        st, js = fetch_api_json(
+            f"/command_config?slug={_urlparse.quote(command_slug)}&default_cost={int(default_cost)}",
             timeout=12,
         )
         if st == 200:
@@ -246,8 +260,8 @@ def descontar_creditos(id_tg: str, cantidad: int = 1):
     if not API_BASE:
         return False, {}
 
-    st, js = _fetch_json(
-        f"{API_BASE}/cred",
+    st, js = fetch_api_json(
+        "/cred",
         method="POST",
         payload={"ID_TG": id_tg, "operacion": "restar", "cantidad": cantidad},
     )

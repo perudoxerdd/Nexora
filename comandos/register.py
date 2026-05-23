@@ -1,18 +1,16 @@
 import os
 import json
 import html
-from urllib import request as _urlreq
-from urllib.error import HTTPError, URLError
 
 from telegram import Update
 from telegram.ext import ContextTypes
+
+from comandos.utils import API_BASE, fetch_api_json
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE_PATH = os.path.join(BASE_DIR, "config.json")
 
 BOT_NAME = ""
-API_BASE = ""
-INTERNAL_API_KEY = ""
 cfg = {}
 
 if os.path.exists(CONFIG_FILE_PATH):
@@ -23,51 +21,6 @@ if os.path.exists(CONFIG_FILE_PATH):
     except Exception:
         BOT_NAME = ""
         cfg = {}
-
-API_BASE = (
-    os.environ.get("SPIDERSYN_API_BASE")
-    or os.environ.get("API_BASE")
-    or os.environ.get("API_DB_BASE")
-    or cfg.get("API_DB_BASE")
-    or cfg.get("API_BASE")
-    or ""
-).rstrip("/")
-INTERNAL_API_KEY = (
-    os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
-    or os.environ.get("INTERNAL_API_KEY")
-    or cfg.get("INTERNAL_API_KEY")
-    or cfg.get("TOKEN_BOT")
-    or ""
-).strip()
-
-
-def _fetch_json(url: str, timeout: int = 15):
-    headers = {"User-Agent": "NexoraBot/1.0"}
-    if INTERNAL_API_KEY:
-        headers["X-Internal-Api-Key"] = INTERNAL_API_KEY
-    req = _urlreq.Request(url, headers=headers)
-    try:
-        with _urlreq.urlopen(req, timeout=timeout) as resp:
-            status = resp.getcode() or 200
-            body = resp.read().decode("utf-8", errors="replace")
-            try:
-                import json as _json
-                return status, _json.loads(body)
-            except Exception:
-                return status, {"status": "error", "message": body}
-    except HTTPError as e:
-        try:
-            body = e.read().decode("utf-8", errors="replace")
-            import json as _json
-            data = _json.loads(body)
-        except Exception:
-            data = {"status": "error", "message": str(e)}
-        return e.code, data
-    except URLError as e:
-        return 599, {"status": "error", "message": str(e)}
-    except Exception as e:
-        return 500, {"status": "error", "message": str(e)}
-
 
 async def register_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -84,7 +37,7 @@ async def register_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    status, data = _fetch_json(f"{API_BASE}/register?ID_TG={id_tg}")
+    status, data = fetch_api_json(f"/register?ID_TG={id_tg}", timeout=15)
 
     nombre = html.escape(user.first_name or "Usuario")
     perfil = f"https://t.me/{user.username}" if user.username else f"tg://user?id={user.id}"
