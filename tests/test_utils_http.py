@@ -80,6 +80,15 @@ class UtilsHttpTest(unittest.TestCase):
             self.assertTrue(utils.is_admin_id("7454664711"))
             self.assertFalse(utils.is_admin_id("abc"))
 
+    def test_default_asset_url_uses_api_base(self):
+        from comandos import utils
+
+        with patch.object(utils, "API_BASE", "https://example.test"):
+            self.assertEqual(
+                utils.default_asset_url("ft start.png"),
+                "https://example.test/assets/default/ft%20start.png",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

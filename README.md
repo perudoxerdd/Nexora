@@ -9,8 +9,8 @@ ID dueño: `7454664711`
 
 Usa dos servicios desde este repo:
 
-- `web`: `gunicorn -w 2 -b 0.0.0.0:$PORT app:app`
-- `worker`: `python main.py`
+- `web`: `RAILPACK_START_CMD=gunicorn -w 2 -b 0.0.0.0:$PORT app:app`
+- `worker`: `RAILPACK_START_CMD=python main.py`
 
 Variables recomendadas en ambos servicios:
 
@@ -38,6 +38,8 @@ NEXORA_DATA_DIR=/data
 ```
 
 Los nombres viejos `SPIDERSYN_*` siguen funcionando como compatibilidad, pero el repo nuevo debe usar `NEXORA_*`.
+
+Las imágenes por defecto de `/start`, `/buy`, `/cmds` y `/cmdsadmin` están en `default_assets/` y se sirven desde `/assets/default/...`.
 
 ## Validación local
 

@@ -4,6 +4,7 @@ import sys
 import json
 import time
 from urllib import parse as _urlparse
+from telegram.error import Conflict
 from telegram.ext import CommandHandler, Application, CallbackQueryHandler, MessageHandler, filters
 from comandos.utils import API_BASE as API_DB_BASE, fetch_json_url
 
@@ -159,6 +160,14 @@ def register_request_commands(application):
         )
 
 
+async def log_worker_error(update, context):
+    err = getattr(context, "error", None)
+    if isinstance(err, Conflict):
+        print("Telegram polling conflict: otra instancia intentó leer updates con el mismo token.")
+        return
+    print(f"Worker error: {err!r}")
+
+
 def _fetch_dynamic_command_slugs() -> list[str]:
     st, js = _fetch_json(f"{API_DB_BASE}/bot_catalog", timeout=15)
     if st != 200 or (js or {}).get("status") != "ok":
@@ -187,6 +196,7 @@ def _fetch_dynamic_command_slugs() -> list[str]:
 def main():
     admin_requests.init_db()
     application = Application.builder().token(TELEGRAM_TOKEN).build()
+    application.add_error_handler(log_worker_error)
 
     # Públicos / generales
     add_command_handler(application, "start", start_command)
