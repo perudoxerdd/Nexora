@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, request, redirect, render_template, session, url_for, Response, send_file
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import secrets
 from collections import Counter
 import math
@@ -246,7 +246,7 @@ def generate_unique_token() -> str:
     return hashlib.sha256(seed).hexdigest()
 
 def now_utc() -> datetime:
-    return datetime.utcnow().replace(microsecond=0)
+    return datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
 
 def now_iso() -> str:
     return now_utc().isoformat() + "Z"
