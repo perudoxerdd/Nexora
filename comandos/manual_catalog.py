@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import time
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -24,9 +25,19 @@ if BOT_NAME.upper() in {"SPIDERSYN", "#SPIDERSYN"}:
     BOT_NAME = "#NEXORA"
 CMDS = CFG.get("CMDS", {}) or {}
 ERRS = CFG.get("ERRORCONSULTA", {}) or {}
+_admin_raw = os.environ.get("SPIDERSYN_ADMIN_ID") or os.environ.get("ADMIN_ID") or CFG.get("ADMIN_ID")
+if isinstance(_admin_raw, list):
+    _admin_values = _admin_raw
+elif _admin_raw is None:
+    _admin_values = []
+else:
+    _admin_values = str(_admin_raw).replace(",", " ").split()
+ADMIN_IDS = {int(x) for x in _admin_values if str(x).strip().isdigit()}
 
 NOCRED_TXT = ERRS.get("NOCREDITSTXT") or "[❗] No tienes créditos suficientes."
 NOCRED_FT = (ERRS.get("NOCREDITSFT") or "").strip() or None
+PLAN_LEVELS = {"FREE": 0, "BASICO": 1, "STANDARD": 2, "PREMIUM": 3}
+PLAN_LABELS = {"FREE": "Libre", "BASICO": "Básico", "STANDARD": "Standard", "PREMIUM": "Premium"}
 
 
 def _extract_command_slug(message_text: str | None) -> str:
@@ -89,6 +100,87 @@ def _parse_command_meta(command_cfg: dict) -> dict:
         "info": str(data.get("info") or "").strip(),
         "validation": data.get("validation") if isinstance(data.get("validation"), dict) else {},
     }
+
+
+def _normalize_plan(value: str | None) -> str:
+    raw = (value or "").strip().upper()
+    aliases = {
+        "": "FREE",
+        "NONE": "FREE",
+        "PUBLICO": "FREE",
+        "PÚBLICO": "FREE",
+        "LIBRE": "FREE",
+        "BASIC": "BASICO",
+        "BÁSICO": "BASICO",
+        "STANDAR": "STANDARD",
+        "ESTANDAR": "STANDARD",
+        "ESTÁNDAR": "STANDARD",
+    }
+    raw = aliases.get(raw, raw)
+    return raw if raw in PLAN_LEVELS else "FREE"
+
+
+def _user_plan(info_usuario: dict) -> str:
+    return _normalize_plan(
+        info_usuario.get("PLAN")
+        or info_usuario.get("plan")
+        or info_usuario.get("ROL_TG")
+        or info_usuario.get("rol_tg")
+    )
+
+
+def _is_privileged_user(info_usuario: dict) -> bool:
+    role = (
+        info_usuario.get("ROL_TG")
+        or info_usuario.get("ROL")
+        or info_usuario.get("role")
+        or info_usuario.get("rol")
+        or ""
+    )
+    return str(role).strip().upper() in {"FUNDADOR", "DUEÑO", "DUENO", "OWNER", "ADMIN", "COFUNDADOR"}
+
+
+def _plan_block_message(command: str, required_plan: str, current_plan: str) -> str:
+    required_label = PLAN_LABELS.get(required_plan, required_plan)
+    current_label = PLAN_LABELS.get(current_plan, current_plan)
+    return (
+        "🔒 Acceso reservado\n\n"
+        f"El comando /{command} requiere plan {required_label} o superior.\n"
+        f"Tu plan actual es {current_label}.\n\n"
+        "Usa /buy para subir de rango y activar este comando."
+    )
+
+
+def _antispam_seconds(info_usuario: dict) -> int:
+    raw = (
+        info_usuario.get("ANTISPAM")
+        or info_usuario.get("anti_spam")
+        or info_usuario.get("antispam")
+        or info_usuario.get("ANTI_SPAM")
+        or 0
+    )
+    try:
+        return max(0, int(float(raw)))
+    except Exception:
+        return 0
+
+
+def _check_request_cooldown(context: ContextTypes.DEFAULT_TYPE, user_id: int, info_usuario: dict) -> str | None:
+    if user_id in ADMIN_IDS or _is_privileged_user(info_usuario):
+        return None
+    cooldown = _antispam_seconds(info_usuario)
+    if cooldown <= 0:
+        return None
+    bot_data = getattr(context.application, "bot_data", {}) if getattr(context, "application", None) else {}
+    store = bot_data.setdefault("manual_command_cooldowns", {})
+    key = str(user_id)
+    now = time.monotonic()
+    last = float(store.get(key) or 0)
+    remaining = int(round(cooldown - (now - last)))
+    if remaining > 0:
+        return f"UPS, por favor espera el anti-spam de {cooldown} segundos.\nIntenta de nuevo en {remaining} s."
+    store[key] = now
+    return None
 
 
 def _message_media_source(msg):
@@ -222,6 +314,20 @@ async def manual_catalog_command(update: Update, context: ContextTypes.DEFAULT_T
     ilimitado = info_usuario.get("ilimitado", False)
     creditos = int(info_usuario.get("CREDITOS", 0))
     required_credits = int(command_cfg.get("cost", 1))
+    required_plan = _normalize_plan(command_cfg.get("required_plan"))
+    current_plan = _user_plan(info_usuario)
+
+    if not _is_privileged_user(info_usuario) and PLAN_LEVELS[current_plan] < PLAN_LEVELS[required_plan]:
+        await msg.reply_text(
+            _plan_block_message(command_slug, required_plan, current_plan),
+            reply_to_message_id=msg.message_id,
+        )
+        return
+
+    cooldown_error = _check_request_cooldown(context, user.id, info_usuario)
+    if cooldown_error:
+        await msg.reply_text(cooldown_error, reply_to_message_id=msg.message_id)
+        return
 
     if not ilimitado and creditos < required_credits:
         if NOCRED_FT:

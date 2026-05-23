@@ -9,6 +9,7 @@ __pycache__/
 backups/
 panel_assets/
 spidersyn-panel-restore.json
+panel_secret.key
 
 config.json
 .env
