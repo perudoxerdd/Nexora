@@ -5,7 +5,14 @@ import time
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from storage import db_path
-from comandos.utils import fetch_api_json
+from comandos.utils import (
+    DEFAULT_CHANNEL_LINK,
+    DEFAULT_GROUP_LINK,
+    DEFAULT_OWNER_LINK,
+    DEFAULT_OWNER_TEXT,
+    default_asset_url,
+    fetch_api_json,
+)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE_PATH = os.path.join(BASE_DIR, "config.json")
@@ -193,8 +200,8 @@ def _build_buy_keyboard(settings: dict) -> InlineKeyboardMarkup:
     ]
 
     buttons = []
-    owner_text = settings.get("BT_OWNER") or cfg.get("BT_OWNER")
-    owner_link = settings.get("OWNER_LINK") or cfg.get("OWNER_LINK")
+    owner_text = settings.get("BT_OWNER") or cfg.get("BT_OWNER") or DEFAULT_OWNER_TEXT
+    owner_link = settings.get("OWNER_LINK") or cfg.get("OWNER_LINK") or DEFAULT_OWNER_LINK
     if non_empty(owner_text) and non_empty(owner_link):
         buttons.append(btn(f"[❄️] {owner_text}", owner_link))
 
@@ -213,8 +220,8 @@ def _build_buy_keyboard(settings: dict) -> InlineKeyboardMarkup:
     if buttons:
         rows.append([InlineKeyboardButton("Actualizar precios", callback_data="buy:all")])
     extra_buttons = []
-    group_link = settings.get("GRUPO_LINK") or cfg.get("GRUPO_LINK")
-    channel_link = settings.get("CANAL_LINK") or cfg.get("CANAL_LINK")
+    group_link = settings.get("GRUPO_LINK") or cfg.get("GRUPO_LINK") or DEFAULT_GROUP_LINK
+    channel_link = settings.get("CANAL_LINK") or cfg.get("CANAL_LINK") or DEFAULT_CHANNEL_LINK
     support_link = settings.get("SUPPORT_LINK") or cfg.get("SUPPORT_LINK") or settings.get("SOPORTE_LINK") or cfg.get("SOPORTE_LINK")
     terms_link = settings.get("TERMINOS_LINK") or cfg.get("TERMINOS_LINK")
     if non_empty(group_link):
@@ -237,7 +244,7 @@ async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     settings = _get_panel_settings()
 
     keyboard = _build_buy_keyboard(settings)
-    ft_buy = settings.get("FT_BUY") or (cfg.get("LOGO") or {}).get("FT_BUY")
+    ft_buy = settings.get("FT_BUY") or (cfg.get("LOGO") or {}).get("FT_BUY") or default_asset_url("ft_buy.png")
 
     if non_empty(ft_buy):
         await update.message.reply_photo(

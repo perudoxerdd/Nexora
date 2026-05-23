@@ -7,7 +7,7 @@ import time
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from storage import db_path
-from comandos.utils import fetch_api_json
+from comandos.utils import default_asset_url, fetch_api_json
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE_PATH = os.path.join(BASE_DIR, "config.json")
@@ -141,6 +141,8 @@ def _get_menu_image(cfg: dict) -> str | None:
     img = settings.get("FT_CMDS") or (cfg.get("LOGO") or {}).get("FT_CMDS")
     if not img:
         img = settings.get("FT_START") or (cfg.get("LOGO") or {}).get("FT_START")
+    if not img:
+        img = default_asset_url("ft_cmds.png")
     return img
 
 

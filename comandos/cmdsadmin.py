@@ -7,7 +7,7 @@ from urllib import parse as _urlparse
 from telegram import Update
 from telegram.ext import ContextTypes
 from storage import db_path
-from comandos.utils import API_BASE, configured_admin_ids, fetch_api_json
+from comandos.utils import API_BASE, configured_admin_ids, default_asset_url, fetch_api_json
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE_PATH = os.path.join(BASE_DIR, "config.json")
@@ -144,6 +144,7 @@ async def cmdsadmin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         or (LOGO.get("FT_CMDSADMIN") or "").strip()
         or (LOGO.get("FT_CMDS") or "").strip()
         or (CMDS.get("FT_CMDSADMIN") or "").strip()
+        or default_asset_url("ft_cmdsadmin.png")
         or ""
     )
     role = _get_role(user.id)

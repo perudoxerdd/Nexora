@@ -5,7 +5,17 @@ import time
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from storage import db_path
-from comandos.utils import API_BASE, fetch_api_json
+from comandos.utils import (
+    API_BASE,
+    DEFAULT_CHANNEL_LINK,
+    DEFAULT_CHANNEL_TEXT,
+    DEFAULT_GROUP_LINK,
+    DEFAULT_GROUP_TEXT,
+    DEFAULT_OWNER_LINK,
+    DEFAULT_OWNER_TEXT,
+    default_asset_url,
+    fetch_api_json,
+)
 
 # --- Cargar config.json ---
 CONFIG_FILE_PATH = 'config.json'
@@ -79,15 +89,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     MARCA       = settings.get("BOT_NAME") or cfg.get("BOT_NAME") or cfg.get("MARCA")
     NAME        = settings.get("BOT_NAME") or cfg.get("BOT_NAME") or cfg.get("NAME")
     VERSION     = cfg.get("VERSION")
-    LOGO_URL    = settings.get("FT_START") or (cfg.get("LOGO") or {}).get("FT_START")
+    LOGO_URL    = settings.get("FT_START") or (cfg.get("LOGO") or {}).get("FT_START") or default_asset_url("ft_start.png")
 
-    GRUPO_LINK  = settings.get("GRUPO_LINK") or cfg.get("GRUPO_LINK")
-    CANAL_LINK  = settings.get("CANAL_LINK") or cfg.get("CANAL_LINK")
-    OWNER_LINK  = settings.get("OWNER_LINK") or cfg.get("OWNER_LINK")
+    GRUPO_LINK  = settings.get("GRUPO_LINK") or cfg.get("GRUPO_LINK") or DEFAULT_GROUP_LINK
+    CANAL_LINK  = settings.get("CANAL_LINK") or cfg.get("CANAL_LINK") or DEFAULT_CHANNEL_LINK
+    OWNER_LINK  = settings.get("OWNER_LINK") or cfg.get("OWNER_LINK") or DEFAULT_OWNER_LINK
 
-    BT_OWNER    = settings.get("BT_OWNER") or cfg.get("BT_OWNER") or "OWNER"
-    BT_CANAL    = settings.get("BT_CANAL") or cfg.get("BT_CANAL") or "CANAL"
-    BT_GRUPO    = settings.get("BT_GRUPO") or cfg.get("BT_GRUPO") or "GRUPO"
+    BT_OWNER    = settings.get("BT_OWNER") or cfg.get("BT_OWNER") or DEFAULT_OWNER_TEXT
+    BT_CANAL    = settings.get("BT_CANAL") or cfg.get("BT_CANAL") or DEFAULT_CHANNEL_TEXT
+    BT_GRUPO    = settings.get("BT_GRUPO") or cfg.get("BT_GRUPO") or DEFAULT_GROUP_TEXT
 
     sellers_raw = [
         (settings.get("BT_SELLER") or cfg.get("BT_SELLER"),  settings.get("SELLER_LINK") or cfg.get("SELLER_LINK")),

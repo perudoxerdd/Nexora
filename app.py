@@ -453,12 +453,12 @@ DEFAULT_BUY_PACKAGES = [
 
 DEFAULT_PANEL_SETTINGS = [
     ("BOT_NAME", CFG.get("BOT_NAME") or CFG.get("NAME") or "#NEXORA ⇒"),
-    ("BT_OWNER", CFG.get("BT_OWNER") or "OWNER"),
-    ("OWNER_LINK", CFG.get("OWNER_LINK") or ""),
+    ("BT_OWNER", CFG.get("BT_OWNER") or "@PeruDoxer"),
+    ("OWNER_LINK", CFG.get("OWNER_LINK") or "https://t.me/PeruDoxer"),
     ("BT_CANAL", CFG.get("BT_CANAL") or "CANAL"),
-    ("CANAL_LINK", CFG.get("CANAL_LINK") or ""),
+    ("CANAL_LINK", CFG.get("CANAL_LINK") or "https://t.me/SpiderSynUpdate"),
     ("BT_GRUPO", CFG.get("BT_GRUPO") or "GRUPO"),
-    ("GRUPO_LINK", CFG.get("GRUPO_LINK") or ""),
+    ("GRUPO_LINK", CFG.get("GRUPO_LINK") or "https://t.me/NexoraData"),
     ("BT_SELLER", CFG.get("BT_SELLER") or ""),
     ("SELLER_LINK", CFG.get("SELLER_LINK") or ""),
     ("BT_SELLER1", CFG.get("BT_SELLER1") or ""),
@@ -2455,6 +2455,10 @@ def panel_assets_dir() -> str:
     return path
 
 
+def default_assets_dir() -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "default_assets")
+
+
 def public_base_url() -> str:
     configured = (
         os.environ.get("NEXORA_PANEL_URL")
@@ -2481,6 +2485,17 @@ def panel_public_asset(filename: str):
     if not safe_name or safe_name != os.path.basename(filename):
         return jsonify({"status": "error", "message": "Archivo inválido"}), 400
     path = os.path.join(panel_assets_dir(), safe_name)
+    if not os.path.exists(path):
+        return jsonify({"status": "error", "message": "Archivo no encontrado"}), 404
+    return send_file(path)
+
+
+@app.route("/assets/default/<path:filename>", methods=["GET"])
+def default_public_asset(filename: str):
+    safe_name = secure_filename(os.path.basename(filename))
+    if not safe_name or safe_name != os.path.basename(filename):
+        return jsonify({"status": "error", "message": "Archivo inválido"}), 400
+    path = os.path.join(default_assets_dir(), safe_name)
     if not os.path.exists(path):
         return jsonify({"status": "error", "message": "Archivo no encontrado"}), 404
     return send_file(path)

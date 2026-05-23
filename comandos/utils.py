@@ -41,6 +41,22 @@ INTERNAL_API_KEY = (
     or ""
 ).strip()
 
+DEFAULT_OWNER_TEXT = "@PeruDoxer"
+DEFAULT_OWNER_LINK = "https://t.me/PeruDoxer"
+DEFAULT_GROUP_TEXT = "GRUPO"
+DEFAULT_GROUP_LINK = "https://t.me/NexoraData"
+DEFAULT_CHANNEL_TEXT = "CANAL"
+DEFAULT_CHANNEL_LINK = "https://t.me/SpiderSynUpdate"
+
+
+def default_asset_url(filename: str) -> str:
+    if not API_BASE:
+        return ""
+    clean = str(filename or "").strip().lstrip("/")
+    if not clean:
+        return ""
+    return api_url(f"/assets/default/{_urlparse.quote(clean)}")
+
 
 def api_url(path: str) -> str:
     if not API_BASE:
