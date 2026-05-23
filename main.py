@@ -1,3 +1,4 @@
+import asyncio
 import os
 import sys
 import json
@@ -162,7 +163,7 @@ def anti_spam_guard(handler_coro, cmd_name: str, skip_empty_args: bool = False):
             return await handler_coro(update, context)
         key = (user_id, cmd_name)
         now = time.monotonic()
-        antispam = _get_antispam_seconds(user_id)
+        antispam = await asyncio.to_thread(_get_antispam_seconds, user_id)
 
         last = _last_call_ts.get(key)
         if last is not None and (now - last) < antispam:
