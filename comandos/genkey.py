@@ -2,11 +2,11 @@ import html
 import json
 import os
 from urllib import parse as _urlparse
-from urllib import request as _urlreq
-from urllib.error import HTTPError, URLError
 
 from telegram import Update
 from telegram.ext import ContextTypes
+
+from comandos.utils import API_BASE, fetch_api_json
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE_PATH = os.path.join(BASE_DIR, "config.json")
@@ -27,51 +27,6 @@ elif _admin_raw is None:
 else:
     _admin_values = str(_admin_raw).replace(",", " ").split()
 ADMIN_IDS = {int(x) for x in _admin_values if str(x).strip().isdigit()}
-
-API_BASE = (
-    os.environ.get("SPIDERSYN_API_BASE")
-    or os.environ.get("API_BASE")
-    or os.environ.get("API_DB_BASE")
-    or CFG.get("API_DB_BASE")
-    or CFG.get("API_BASE")
-    or ""
-).rstrip("/")
-INTERNAL_API_KEY = (
-    os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
-    or os.environ.get("INTERNAL_API_KEY")
-    or CFG.get("INTERNAL_API_KEY")
-    or CFG.get("TOKEN_BOT")
-    or ""
-).strip()
-
-
-def _fetch_json(url: str, timeout: int = 15, method: str = "GET", payload: dict | None = None):
-    headers = {"User-Agent": "NexoraBot/1.0"}
-    data = None
-    if INTERNAL_API_KEY:
-        headers["X-Internal-Api-Key"] = INTERNAL_API_KEY
-    if payload is not None:
-        headers["Content-Type"] = "application/json"
-        data = json.dumps(payload).encode("utf-8")
-    req = _urlreq.Request(url, data=data, headers=headers, method=method)
-    try:
-        with _urlreq.urlopen(req, timeout=timeout) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
-            try:
-                return resp.getcode() or 200, json.loads(body)
-            except Exception:
-                return resp.getcode() or 200, {"status": "error", "message": body}
-    except HTTPError as e:
-        try:
-            body = e.read().decode("utf-8", errors="replace")
-            return e.code, json.loads(body)
-        except Exception:
-            return e.code, {"status": "error", "message": str(e)}
-    except URLError as e:
-        return 599, {"status": "error", "message": str(e)}
-    except Exception as e:
-        return 500, {"status": "error", "message": str(e)}
-
 
 def _api_ready() -> bool:
     return bool(API_BASE)
@@ -165,8 +120,8 @@ async def genkey(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await msg.reply_text(f"❌ {html.escape(err)}", parse_mode="HTML")
             return
 
-    status, data = _fetch_json(
-        f"{API_BASE}/keys/generate",
+    status, data = fetch_api_json(
+        "/keys/generate",
         method="POST",
         payload={
             "tipo": tipo,
@@ -214,8 +169,8 @@ async def redeem(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     key_input = context.args[0].strip().upper()
-    status, data = _fetch_json(
-        f"{API_BASE}/keys/redeem",
+    status, data = fetch_api_json(
+        "/keys/redeem",
         method="POST",
         payload={"key": key_input, "ID_TG": user.id},
     )
@@ -251,7 +206,7 @@ async def keyslog(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text("❌ API_BASE no está configurada.")
         return
 
-    status, data = _fetch_json(f"{API_BASE}/keys/log?limit=15")
+    status, data = fetch_api_json("/keys/log?limit=15")
     if status != 200 or data.get("status") != "ok":
         await msg.reply_text(f"❌ Error consultando canjes: {html.escape(str(data.get('message', status)))}", parse_mode="HTML")
         return
@@ -285,7 +240,7 @@ async def keysinfo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     key_input = context.args[0].strip().upper()
-    status, data = _fetch_json(f"{API_BASE}/keys/info?key={_urlparse.quote(key_input)}")
+    status, data = fetch_api_json(f"/keys/info?key={_urlparse.quote(key_input)}")
     if status != 200 or data.get("status") != "ok":
         await msg.reply_text(f"❌ {html.escape(str(data.get('message', 'Key no encontrada')))}", parse_mode="HTML")
         return
