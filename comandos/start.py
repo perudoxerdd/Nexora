@@ -147,6 +147,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "<b>⚡ Accesos rápidos</b>\n"
         "🪪 /register · Activa tu cuenta\n"
         "🧭 /cmds · Explora comandos disponibles\n"
+        "📜 /rules · Lee las reglas del grupo\n"
         "👤 /me · Revisa tu perfil, plan y créditos\n"
         "💎 /buy · Ver paquetes y vendedores\n\n"
         "<b>🛡️ Aviso</b>\n"
