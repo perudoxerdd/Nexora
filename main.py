@@ -3,10 +3,9 @@ import os
 import sys
 import json
 import time
-from urllib import request as _urlreq
-from urllib.error import HTTPError, URLError
 from urllib import parse as _urlparse
 from telegram.ext import CommandHandler, Application, CallbackQueryHandler, MessageHandler, filters
+from comandos.utils import API_BASE as API_DB_BASE, fetch_json_url
 
 from comandos.start import start_command
 from comandos.buy import buy_command, buy_callback
@@ -43,10 +42,8 @@ from comandos.admin_tools import (
 
 # ---------- Config ----------
 CONFIG_FILE_PATH = 'config.json'
-API_DB_BASE = ""
 TELEGRAM_TOKEN = None
 ADMIN_ID = None
-INTERNAL_API_KEY = ""
 
 config_data = {}
 if os.path.exists(CONFIG_FILE_PATH):
@@ -76,25 +73,6 @@ try:
 except Exception:
     ADMIN_ID = None
 
-API_DB_BASE = (
-    os.environ.get("NEXORA_API_BASE")
-    or os.environ.get("SPIDERSYN_API_BASE")
-    or os.environ.get("API_BASE")
-    or os.environ.get("API_DB_BASE")
-    or config_data.get('API_DB_BASE')
-    or config_data.get('API_BASE')
-    or ""
-).rstrip("/")
-
-INTERNAL_API_KEY = (
-    os.environ.get("NEXORA_INTERNAL_API_KEY")
-    or os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
-    or os.environ.get("INTERNAL_API_KEY")
-    or config_data.get("INTERNAL_API_KEY")
-    or config_data.get("TOKEN_BOT")
-    or ""
-).strip()
-
 if not TELEGRAM_TOKEN or ADMIN_ID is None or not API_DB_BASE:
     print("Error: faltan variables requeridas para iniciar el bot.")
     print("Necesitas definir TOKEN_BOT, ADMIN_ID y API_BASE/API_DB_BASE en variables de entorno o config.json.")
@@ -110,29 +88,7 @@ _antispam_cache: dict[int, tuple[float, int]] = {}
 ANTISPAM_CACHE_TTL = 30.0
 
 def _fetch_json(url: str, timeout: int = 12):
-    headers = {"User-Agent": "NexoraBot/1.0"}
-    if INTERNAL_API_KEY:
-        headers["X-Internal-Api-Key"] = INTERNAL_API_KEY
-    req = _urlreq.Request(url, headers=headers)
-    try:
-        with _urlreq.urlopen(req, timeout=timeout) as resp:
-            st = resp.getcode() or 200
-            body = resp.read().decode("utf-8", errors="replace")
-            try:
-                import json as _j
-                return st, _j.loads(body)
-            except Exception:
-                return st, {"status": "error", "message": body}
-    except HTTPError as e:
-        try:
-            body = e.read().decode("utf-8", errors="replace")
-            import json as _j
-            data = _j.loads(body)
-        except Exception:
-            data = {"status": "error", "message": str(e)}
-        return e.code, data
-    except URLError as e:
-        return 599, {"status": "error", "message": str(e)}
+    return fetch_json_url(url, timeout=timeout)
 
 def _get_antispam_seconds(user_id: int) -> int:
     """
@@ -143,7 +99,7 @@ def _get_antispam_seconds(user_id: int) -> int:
     if cached and now - cached[0] < ANTISPAM_CACHE_TTL:
         return cached[1]
 
-    st, js = _fetch_json(f"{API_DB_BASE}/tg_info?ID_TG={_urlparse.quote(str(user_id))}")
+    st, js = _fetch_json(f"{API_DB_BASE}/tg_info?ID_TG={_urlparse.quote(str(user_id))}", timeout=12)
     antispam = 15
     if st == 200:
         data = (js.get("data") or {})

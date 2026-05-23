@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import sqlite3
+from typing import Iterable
 from urllib import request as _urlreq
 from urllib import parse as _urlparse
 from urllib.error import HTTPError, URLError
@@ -48,6 +49,29 @@ def api_url(path: str) -> str:
     return f"{API_BASE}{clean_path}"
 
 
+def configured_admin_ids(raw=None) -> set[int]:
+    if raw is None:
+        raw = (
+            os.environ.get("NEXORA_ADMIN_ID")
+            or os.environ.get("SPIDERSYN_ADMIN_ID")
+            or os.environ.get("ADMIN_ID")
+            or CFG.get("ADMIN_ID")
+            or "7454664711"
+        )
+    if isinstance(raw, Iterable) and not isinstance(raw, (str, bytes, dict)):
+        values = raw
+    else:
+        values = str(raw or "").replace(",", " ").split()
+    return {int(value) for value in values if str(value).strip().isdigit()}
+
+
+def is_admin_id(user_id: int | str | None) -> bool:
+    try:
+        return int(user_id) in configured_admin_ids()
+    except Exception:
+        return False
+
+
 def _fetch_json(url: str, timeout: int = 20, method: str = "GET", payload: dict | None = None):
     headers = {"User-Agent": "NexoraBot/1.0"}
     data = None
@@ -78,11 +102,34 @@ def _fetch_json(url: str, timeout: int = 20, method: str = "GET", payload: dict 
         return 500, {"status": "error", "message": str(e)}
 
 
+def fetch_json_url(url: str, timeout: int = 20, method: str = "GET", payload: dict | None = None):
+    return _fetch_json(url, timeout=timeout, method=method, payload=payload)
+
+
 def fetch_api_json(path: str, timeout: int = 20, method: str = "GET", payload: dict | None = None):
     url = api_url(path)
     if not url:
         return 500, {"status": "error", "message": "API_BASE no configurada"}
     return _fetch_json(url, timeout=timeout, method=method, payload=payload)
+
+
+def fetch_api_bytes(path: str, timeout: int = 20):
+    url = api_url(path)
+    if not url:
+        return 500, b""
+    headers = {"User-Agent": "NexoraBot/1.0"}
+    if INTERNAL_API_KEY:
+        headers["X-Internal-Api-Key"] = INTERNAL_API_KEY
+    req = _urlreq.Request(url, headers=headers)
+    try:
+        with _urlreq.urlopen(req, timeout=timeout) as resp:
+            return resp.getcode() or 200, resp.read()
+    except HTTPError as e:
+        return e.code, e.read()
+    except URLError as e:
+        return 599, str(e).encode("utf-8", errors="replace")
+    except Exception as e:
+        return 500, str(e).encode("utf-8", errors="replace")
 
 
 async def fetch_api_json_async(path: str, timeout: int = 20, method: str = "GET", payload: dict | None = None):

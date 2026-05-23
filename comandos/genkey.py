@@ -6,7 +6,7 @@ from urllib import parse as _urlparse
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from comandos.utils import API_BASE, fetch_api_json
+from comandos.utils import API_BASE, configured_admin_ids, fetch_api_json
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE_PATH = os.path.join(BASE_DIR, "config.json")
@@ -19,14 +19,7 @@ if os.path.exists(CONFIG_FILE_PATH):
     except Exception:
         CFG = {}
 
-_admin_raw = os.environ.get("NEXORA_ADMIN_ID") or os.environ.get("SPIDERSYN_ADMIN_ID") or os.environ.get("ADMIN_ID") or CFG.get("ADMIN_ID") or "7454664711"
-if isinstance(_admin_raw, list):
-    _admin_values = _admin_raw
-elif _admin_raw is None:
-    _admin_values = []
-else:
-    _admin_values = str(_admin_raw).replace(",", " ").split()
-ADMIN_IDS = {int(x) for x in _admin_values if str(x).strip().isdigit()}
+ADMIN_IDS = configured_admin_ids()
 
 def _api_ready() -> bool:
     return bool(API_BASE)

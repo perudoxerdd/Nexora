@@ -5,6 +5,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 CONFIG_FILE_PATH = "config.json"
+OWNER_USERNAME = "@PeruDoxer"
 
 def _get_bot_name() -> str:
     bot_name = "#NEXORA ⇒"
@@ -29,6 +30,8 @@ async def terminos_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     texto = (
     f"<b>{header}</b>\n\n"
+    f"[👑] <b>DUEÑO OFICIAL</b>\n"
+    f"El único dueño de Nexora es <b>{OWNER_USERNAME}</b>. Verifica vendedores/admins antes de comprar.\n\n"
     "[💰] <b>REEMBOLSOS</b>\n"
     "No ofrecemos devoluciones. Si compraste créditos o planes a través de un vendedor, reclama directamente con él. No podemos gestionar devoluciones.\n\n"
     "[🛠] <b>GARANTÍA</b>\n"

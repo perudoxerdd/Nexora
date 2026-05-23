@@ -1,12 +1,11 @@
 import io
 import json
 import os
-from urllib import request as _urlreq
-from urllib.error import HTTPError, URLError
 
 from telegram import InputFile, Update
 from telegram.ext import ContextTypes
 from comandos.bot_errors import api_error_text
+from comandos.utils import API_BASE, INTERNAL_API_KEY, fetch_api_bytes, fetch_api_json, is_admin_id
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE_PATH = os.path.join(BASE_DIR, "config.json")
@@ -19,71 +18,14 @@ try:
 except Exception:
     CFG = {}
 
-API_BASE = (
-    os.environ.get("NEXORA_API_BASE")
-    or os.environ.get("SPIDERSYN_API_BASE")
-    or os.environ.get("API_BASE")
-    or os.environ.get("API_DB_BASE")
-    or CFG.get("API_DB_BASE")
-    or CFG.get("API_BASE")
-    or ""
-).rstrip("/")
 PANEL_URL = (
     os.environ.get("NEXORA_PANEL_URL")
     or os.environ.get("SPIDERSYN_PANEL_URL")
     or CFG.get("PANEL_URL")
     or (f"{API_BASE}/admin/panel" if API_BASE else "")
 ).rstrip("/")
-INTERNAL_API_KEY = (
-    os.environ.get("NEXORA_INTERNAL_API_KEY")
-    or os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
-    or os.environ.get("INTERNAL_API_KEY")
-    or CFG.get("INTERNAL_API_KEY")
-    or CFG.get("TOKEN_BOT")
-    or ""
-).strip()
-
-_admin_raw = os.environ.get("NEXORA_ADMIN_ID") or os.environ.get("SPIDERSYN_ADMIN_ID") or os.environ.get("ADMIN_ID") or CFG.get("ADMIN_ID") or "7454664711"
-if isinstance(_admin_raw, list):
-    _admin_values = _admin_raw
-elif _admin_raw is None:
-    _admin_values = []
-else:
-    _admin_values = str(_admin_raw).replace(",", " ").split()
-ADMIN_IDS = {int(x) for x in _admin_values if str(x).strip().isdigit()}
-
-
 def _is_admin(user_id: int) -> bool:
-    return user_id in ADMIN_IDS
-
-
-def _request(url: str, timeout: int = 20, as_bytes: bool = False):
-    headers = {"User-Agent": "NexoraBot/1.0"}
-    if INTERNAL_API_KEY:
-        headers["X-Internal-Api-Key"] = INTERNAL_API_KEY
-    req = _urlreq.Request(url, headers=headers)
-    try:
-        with _urlreq.urlopen(req, timeout=timeout) as resp:
-            status = resp.getcode() or 200
-            body = resp.read()
-            if as_bytes:
-                return status, body
-            text = body.decode("utf-8", errors="replace")
-            try:
-                return status, json.loads(text)
-            except Exception:
-                return status, {"status": "error", "message": text}
-    except HTTPError as e:
-        try:
-            text = e.read().decode("utf-8", errors="replace")
-            data = json.loads(text)
-        except Exception:
-            data = {"status": "error", "message": str(e)}
-        return e.code, data
-    except URLError as e:
-        return 599, {"status": "error", "message": str(e)}
-    except Exception as e:
-        return 500, {"status": "error", "message": str(e)}
+    return is_admin_id(user_id)
 
 
 def _api_error_message(action: str, status: int, data) -> str:
@@ -100,7 +42,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text("API_BASE no está configurado.", reply_to_message_id=msg.message_id)
         return
 
-    st, data = _request(f"{API_BASE}/health", timeout=15)
+    st, data = fetch_api_json("/health", timeout=15)
     if st != 200 or not isinstance(data, dict):
         await msg.reply_text(_api_error_message("consultar /status", st, data), parse_mode="HTML", reply_to_message_id=msg.message_id)
         return
@@ -175,7 +117,7 @@ async def backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text("API_BASE no está configurado.", reply_to_message_id=msg.message_id)
         return
 
-    st, body = _request(f"{API_BASE}/internal/db-backup.zip", timeout=30, as_bytes=True)
+    st, body = fetch_api_bytes("/internal/db-backup.zip", timeout=30)
     if st != 200 or not isinstance(body, (bytes, bytearray)):
         await msg.reply_text(_api_error_message("crear backup", st, {}), parse_mode="HTML", reply_to_message_id=msg.message_id)
         return

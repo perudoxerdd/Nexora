@@ -7,7 +7,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from comandos.admin_requests import create_request
-from comandos.utils import get_command_runtime_config, verificar_usuario
+from comandos.utils import configured_admin_ids, get_command_runtime_config, verificar_usuario
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE_PATH = os.path.join(BASE_DIR, "config.json")
@@ -25,14 +25,7 @@ if BOT_NAME.upper() in {"SPIDERSYN", "#SPIDERSYN"}:
     BOT_NAME = "#NEXORA"
 CMDS = CFG.get("CMDS", {}) or {}
 ERRS = CFG.get("ERRORCONSULTA", {}) or {}
-_admin_raw = os.environ.get("NEXORA_ADMIN_ID") or os.environ.get("SPIDERSYN_ADMIN_ID") or os.environ.get("ADMIN_ID") or CFG.get("ADMIN_ID") or "7454664711"
-if isinstance(_admin_raw, list):
-    _admin_values = _admin_raw
-elif _admin_raw is None:
-    _admin_values = []
-else:
-    _admin_values = str(_admin_raw).replace(",", " ").split()
-ADMIN_IDS = {int(x) for x in _admin_values if str(x).strip().isdigit()}
+ADMIN_IDS = configured_admin_ids()
 
 NOCRED_TXT = ERRS.get("NOCREDITSTXT") or "[❗] No tienes créditos suficientes."
 NOCRED_FT = (ERRS.get("NOCREDITSFT") or "").strip() or None

@@ -5,11 +5,10 @@ import time
 from typing import Tuple
 
 from urllib import parse as _urlparse
-from urllib import request as _urlreq
-from urllib.error import HTTPError, URLError
 
 from telegram import Update
 from telegram.ext import ContextTypes
+from comandos.utils import API_BASE, configured_admin_ids, fetch_api_json
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE_PATH = os.path.join(BASE_DIR, "config.json")
@@ -22,40 +21,13 @@ try:
 except Exception:
     CFG = {}
 
-API_BASE = (
-    os.environ.get("NEXORA_API_BASE")
-    or os.environ.get("SPIDERSYN_API_BASE")
-    or os.environ.get("API_BASE")
-    or os.environ.get("API_DB_BASE")
-    or CFG.get("API_DB_BASE")
-    or CFG.get("API_BASE")
-    or ""
-).rstrip("/")
-INTERNAL_API_KEY = (
-    os.environ.get("NEXORA_INTERNAL_API_KEY")
-    or os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
-    or os.environ.get("INTERNAL_API_KEY")
-    or CFG.get("INTERNAL_API_KEY")
-    or CFG.get("TOKEN_BOT")
-    or ""
-).strip()
-
-CRED_ENDPOINT = f"{API_BASE}/cred"
-SUB_ENDPOINT = f"{API_BASE}/sub"
-PLAN_ENDPOINT = f"{API_BASE}/plan"
-ROL_ENDPOINT = f"{API_BASE}/rol_tg"
-TGINFO_ENDPOINT = f"{API_BASE}/tg_info"
-COMPRAS_ENDPOINT = f"{API_BASE}/compras"
-ANTISPAM_ENDPOINT = f"{API_BASE}/antispam"
-
-_admin_raw = os.environ.get("NEXORA_ADMIN_ID") or os.environ.get("SPIDERSYN_ADMIN_ID") or os.environ.get("ADMIN_ID") or CFG.get("ADMIN_ID") or "7454664711"
-if isinstance(_admin_raw, list):
-    _admin_values = _admin_raw
-elif _admin_raw is None:
-    _admin_values = []
-else:
-    _admin_values = str(_admin_raw).replace(",", " ").split()
-ADMIN_IDS = {int(x) for x in _admin_values if str(x).strip().isdigit()}
+CRED_ENDPOINT = "/cred"
+SUB_ENDPOINT = "/sub"
+PLAN_ENDPOINT = "/plan"
+ROL_ENDPOINT = "/rol_tg"
+COMPRAS_ENDPOINT = "/compras"
+ANTISPAM_ENDPOINT = "/antispam"
+ADMIN_IDS = configured_admin_ids()
 
 
 _SETTINGS_CACHE = {"ts": 0.0, "data": None}
@@ -75,7 +47,7 @@ def _get_remote_settings() -> dict:
         return _SETTINGS_CACHE["data"]
     if not API_BASE:
         return {}
-    st, js = _fetch_json(f"{API_BASE}/bot_catalog", timeout=12)
+    st, js = fetch_api_json("/bot_catalog", timeout=12)
     if st == 200 and js.get("status") == "ok":
         data = ((js.get("data") or {}).get("settings") or {})
         _SETTINGS_CACHE["ts"] = now
@@ -116,42 +88,10 @@ PLAN_MAP_TXT = {"BASICO", "STANDARD", "PREMIUM"}
 PLAN_TO_ANTISPAM = {"BASICO": 30, "STANDARD": 15, "PREMIUM": 5}
 
 
-def _fetch_json(url: str, timeout: int = 20, method: str = "GET", payload: dict | None = None) -> Tuple[int, dict]:
-    headers = {"User-Agent": "NexoraBot/1.0"}
-    data = None
-    if INTERNAL_API_KEY:
-        headers["X-Internal-Api-Key"] = INTERNAL_API_KEY
-    if payload is not None:
-        headers["Content-Type"] = "application/json"
-        data = json.dumps(payload).encode("utf-8")
-    req = _urlreq.Request(url, data=data, headers=headers, method=method)
-    try:
-        with _urlreq.urlopen(req, timeout=timeout) as resp:
-            st = resp.getcode() or 200
-            body = resp.read().decode("utf-8", errors="replace")
-            try:
-                import json as _j
-                return st, _j.loads(body)
-            except Exception:
-                return st, {"status": "error", "message": body}
-    except HTTPError as e:
-        try:
-            body = e.read().decode("utf-8", errors="replace")
-            import json as _j
-            data = _j.loads(body)
-        except Exception:
-            data = {"status": "error", "message": str(e)}
-        return e.code, data
-    except URLError as e:
-        return 599, {"status": "error", "message": str(e)}
-    except Exception as e:
-        return 500, {"status": "error", "message": str(e)}
-
-
 def _get_tg_info(id_tg: str) -> Tuple[int, dict]:
     if not API_BASE:
         return 500, {"status": "error", "message": "API_BASE no configurada"}
-    return _fetch_json(f"{TGINFO_ENDPOINT}?ID_TG={_urlparse.quote(id_tg)}")
+    return fetch_api_json(f"/tg_info?ID_TG={_urlparse.quote(id_tg)}")
 
 
 def _caller_role_and_auth(user_id: int, need_setrol: bool = False) -> Tuple[bool, str]:
@@ -192,7 +132,7 @@ def _badge(text: str) -> str:
 
 
 def _operate(endpoint: str, target_id: str, oper: str, cantidad: int) -> Tuple[int, dict]:
-    return _fetch_json(
+    return fetch_api_json(
         endpoint,
         method="POST",
         payload={"ID_TG": target_id, "operacion": oper, "cantidad": cantidad},
@@ -203,7 +143,7 @@ def _log_compra(id_tg: str, id_vendedor: str, cantidad_texto: str):
     if not API_BASE:
         return
     try:
-        _fetch_json(
+        fetch_api_json(
             COMPRAS_ENDPOINT,
             timeout=12,
             method="POST",
@@ -232,7 +172,7 @@ async def _notify_admin_purchase(context: ContextTypes.DEFAULT_TYPE, *, target_i
 
 
 def _set_antispam(id_tg: str, valor: int) -> Tuple[int, dict]:
-    return _fetch_json(
+    return fetch_api_json(
         ANTISPAM_ENDPOINT,
         timeout=12,
         method="POST",
@@ -244,7 +184,7 @@ def _do_plan_update_if_provided(target_id: str, plan_txt: str | None) -> tuple[b
     if not plan_txt:
         return True, "—", None
 
-    st, js = _fetch_json(
+    st, js = fetch_api_json(
         PLAN_ENDPOINT,
         method="POST",
         payload={"ID_TG": target_id, "plan": plan_txt},
@@ -568,7 +508,7 @@ async def setrol_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    st, js = _fetch_json(
+    st, js = fetch_api_json(
         ROL_ENDPOINT,
         method="POST",
         payload={"ID_TG": target_id, "rol": rol_to},

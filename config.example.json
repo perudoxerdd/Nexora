@@ -1,7 +1,9 @@
 {
   "TOKEN_BOT": "set-in-railway",
+  "NEXORA_API_BASE": "https://your-web-service.up.railway.app",
   "API_BASE": "https://your-web-service.up.railway.app",
   "ADMIN_ID": "7454664711",
+  "NEXORA_INTERNAL_API_KEY": "set-in-railway",
   "INTERNAL_API_KEY": "set-in-railway",
   "PANEL_USER": "admin",
   "PANEL_PASSWORD": "set-in-railway",

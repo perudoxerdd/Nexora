@@ -65,6 +65,21 @@ class UtilsHttpTest(unittest.TestCase):
 
         asyncio.run(run_check())
 
+    def test_configured_admin_ids_uses_nexora_fallbacks(self):
+        from comandos import utils
+
+        self.assertEqual(utils.configured_admin_ids("7, 8  bad"), {7, 8})
+
+        with patch.dict(os.environ, {"NEXORA_ADMIN_ID": "7454664711"}, clear=False):
+            self.assertIn(7454664711, utils.configured_admin_ids())
+
+    def test_is_admin_id_accepts_string_ids(self):
+        from comandos import utils
+
+        with patch.object(utils, "configured_admin_ids", return_value={7454664711}):
+            self.assertTrue(utils.is_admin_id("7454664711"))
+            self.assertFalse(utils.is_admin_id("abc"))
+
 
 if __name__ == "__main__":
     unittest.main()

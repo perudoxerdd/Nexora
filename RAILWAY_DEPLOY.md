@@ -66,7 +66,7 @@ NEXORA_API_BASE=https://tu-servicio-web.up.railway.app
 3. Configurar variables
 4. Deploy del `web`
 5. Copiar URL pública del `web`
-6. Pegar esa URL en `API_BASE` del `worker`
+6. Pegar esa URL en `NEXORA_API_BASE` del `worker`
 7. Deploy del `worker`
 
 **Chequeo rápido**

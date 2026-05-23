@@ -3,12 +3,11 @@ import json
 import html
 import sqlite3
 from urllib import parse as _urlparse
-from urllib import request as _urlreq
-from urllib.error import HTTPError, URLError
 
 from telegram import Update
 from telegram.ext import ContextTypes
 from storage import db_path
+from comandos.utils import API_BASE, configured_admin_ids, fetch_api_json
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE_PATH = os.path.join(BASE_DIR, "config.json")
@@ -22,32 +21,8 @@ try:
 except Exception:
     CFG = {}
 
-_admin_raw = os.environ.get("NEXORA_ADMIN_ID") or os.environ.get("SPIDERSYN_ADMIN_ID") or os.environ.get("ADMIN_ID") or CFG.get("ADMIN_ID") or "7454664711"
-if isinstance(_admin_raw, list):
-    ADMIN_IDS = {int(x) for x in _admin_raw if str(x).isdigit()}
-elif _admin_raw is None:
-    ADMIN_IDS = set()
-else:
-    ADMIN_IDS = {int(_admin_raw)} if str(_admin_raw).isdigit() else set()
-
 BOT_BRAND = (CFG.get("BOT_NAME") or CFG.get("NAME") or "#BOT").strip()
-API_BASE = (
-    os.environ.get("NEXORA_API_BASE")
-    or os.environ.get("SPIDERSYN_API_BASE")
-    or os.environ.get("API_BASE")
-    or os.environ.get("API_DB_BASE")
-    or CFG.get("API_DB_BASE")
-    or CFG.get("API_BASE")
-    or ""
-).rstrip("/")
-INTERNAL_API_KEY = (
-    os.environ.get("NEXORA_INTERNAL_API_KEY")
-    or os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
-    or os.environ.get("INTERNAL_API_KEY")
-    or CFG.get("INTERNAL_API_KEY")
-    or CFG.get("TOKEN_BOT")
-    or ""
-).strip()
+ADMIN_IDS = configured_admin_ids()
 CMDS = CFG.get("CMDS", {}) or {}
 LOGO = CFG.get("LOGO", {}) or {}
 _ALLOWED_VIEW = {"FUNDADOR", "CO-FUNDADOR", "SELLER"}
@@ -71,33 +46,12 @@ def _get_panel_settings():
     return rows
 
 
-def _fetch_json(url: str, timeout: int = 18):
-    headers = {"User-Agent": "NexoraBot/1.0"}
-    if INTERNAL_API_KEY:
-        headers["X-Internal-Api-Key"] = INTERNAL_API_KEY
-    req = _urlreq.Request(url, headers=headers)
-    try:
-        with _urlreq.urlopen(req, timeout=timeout) as resp:
-            st = resp.getcode() or 200
-            body = resp.read().decode("utf-8", errors="replace")
-            return st, json.loads(body)
-    except HTTPError as e:
-        try:
-            return e.code, json.loads(e.read().decode("utf-8", errors="replace"))
-        except Exception:
-            return e.code, {"status": "error"}
-    except URLError:
-        return 599, {"status": "error"}
-    except Exception:
-        return 500, {"status": "error"}
-
-
 def _get_role(uid: int) -> str:
     if uid in ADMIN_IDS:
         return "ADMIN"
     if not API_BASE:
         return ""
-    st, js = _fetch_json(f"{API_BASE}/tg_info?ID_TG={_urlparse.quote(str(uid))}")
+    st, js = fetch_api_json(f"/tg_info?ID_TG={_urlparse.quote(str(uid))}", timeout=18)
     if st != 200:
         return ""
     return ((js.get("data") or {}).get("ROL_TG") or "").upper()

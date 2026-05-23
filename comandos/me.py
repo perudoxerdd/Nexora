@@ -10,7 +10,7 @@ from typing import Optional, Tuple
 from telegram import Update
 from telegram.ext import ContextTypes
 from storage import db_path
-from comandos.utils import API_BASE, fetch_api_json, fetch_api_json_async
+from comandos.utils import API_BASE, configured_admin_ids, fetch_api_json, fetch_api_json_async
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE_PATH = os.path.join(BASE_DIR, "config.json")
@@ -29,20 +29,7 @@ if os.path.exists(CONFIG_FILE_PATH):
         BOT_NAME = ""
         cfg = {}
 
-_admin_raw = (
-    os.environ.get("NEXORA_ADMIN_ID")
-    or os.environ.get("SPIDERSYN_ADMIN_ID")
-    or os.environ.get("ADMIN_ID")
-    or cfg.get("ADMIN_ID")
-    or "7454664711"
-)
-if isinstance(_admin_raw, list):
-    _admin_values = _admin_raw
-elif _admin_raw is None:
-    _admin_values = []
-else:
-    _admin_values = str(_admin_raw).replace(",", " ").split()
-ADMIN_IDS = {str(x).strip() for x in _admin_values if str(x).strip()}
+ADMIN_IDS = {str(value) for value in configured_admin_ids()}
 
 
 def _to_lima_iso_hm(iso_str: Optional[str]) -> str:

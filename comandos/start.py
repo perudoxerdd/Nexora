@@ -2,11 +2,10 @@ import os
 import json
 import sqlite3
 import time
-from urllib import request as _urlreq
-from urllib.error import HTTPError, URLError
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from storage import db_path
+from comandos.utils import API_BASE, fetch_api_json
 
 # --- Cargar config.json ---
 CONFIG_FILE_PATH = 'config.json'
@@ -37,56 +36,13 @@ def btn(text: str, url: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(text, url=url)
 
 
-API_BASE = (
-    os.environ.get("NEXORA_API_BASE")
-    or os.environ.get("SPIDERSYN_API_BASE")
-    or os.environ.get("API_BASE")
-    or os.environ.get("API_DB_BASE")
-    or cfg.get("API_DB_BASE")
-    or cfg.get("API_BASE")
-    or ""
-).rstrip("/")
-INTERNAL_API_KEY = (
-    os.environ.get("NEXORA_INTERNAL_API_KEY")
-    or os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
-    or os.environ.get("INTERNAL_API_KEY")
-    or cfg.get("INTERNAL_API_KEY")
-    or cfg.get("TOKEN_BOT")
-    or ""
-).strip()
-
-
-def _fetch_json(url: str, timeout: int = 12):
-    headers = {"User-Agent": "NexoraBot/1.0"}
-    if INTERNAL_API_KEY:
-        headers["X-Internal-Api-Key"] = INTERNAL_API_KEY
-    req = _urlreq.Request(url, headers=headers)
-    try:
-        with _urlreq.urlopen(req, timeout=timeout) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
-            try:
-                return resp.getcode() or 200, json.loads(body)
-            except Exception:
-                return resp.getcode() or 200, {"status": "error", "message": body}
-    except HTTPError as e:
-        try:
-            body = e.read().decode("utf-8", errors="replace")
-            return e.code, json.loads(body)
-        except Exception:
-            return e.code, {"status": "error", "message": str(e)}
-    except URLError as e:
-        return 599, {"status": "error", "message": str(e)}
-    except Exception as e:
-        return 500, {"status": "error", "message": str(e)}
-
-
 def _get_remote_settings() -> dict:
     now = time.monotonic()
     if _SETTINGS_CACHE["data"] is not None and now - float(_SETTINGS_CACHE["ts"]) < 30:
         return _SETTINGS_CACHE["data"]
     if not API_BASE:
         return {}
-    status, data = _fetch_json(f"{API_BASE}/bot_catalog", timeout=12)
+    status, data = fetch_api_json("/bot_catalog", timeout=12)
     if status == 200 and data.get("status") == "ok":
         settings = ((data.get("data") or {}).get("settings") or {})
         _SETTINGS_CACHE["ts"] = now

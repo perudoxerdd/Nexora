@@ -4,11 +4,10 @@ import html
 import math
 import sqlite3
 import time
-from urllib import request as _urlreq
-from urllib.error import HTTPError, URLError
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from storage import db_path
+from comandos.utils import fetch_api_json
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE_PATH = os.path.join(BASE_DIR, "config.json")
@@ -23,23 +22,6 @@ try:
             CFG = json.load(f) or {}
 except Exception:
     CFG = {}
-API_BASE = (
-    os.environ.get("NEXORA_API_BASE")
-    or os.environ.get("SPIDERSYN_API_BASE")
-    or os.environ.get("API_BASE")
-    or os.environ.get("API_DB_BASE")
-    or CFG.get("API_DB_BASE")
-    or CFG.get("API_BASE")
-    or ""
-).rstrip("/")
-INTERNAL_API_KEY = (
-    os.environ.get("NEXORA_INTERNAL_API_KEY")
-    or os.environ.get("SPIDERSYN_INTERNAL_API_KEY")
-    or os.environ.get("INTERNAL_API_KEY")
-    or CFG.get("INTERNAL_API_KEY")
-    or CFG.get("TOKEN_BOT")
-    or ""
-).strip()
 _CATALOG_CACHE = {"ts": 0.0, "data": None}
 DEFAULT_DETAILS = {
     "nm": {"usage_hint": "/nm nombre|paterno|materno", "description": "Busqueda por nombres con DNI y edad."},
@@ -118,17 +100,8 @@ def _load_cfg():
 
 
 def _fetch_api_json(path: str, timeout: int = 15):
-    if not API_BASE:
-        return None
-    headers = {"User-Agent": "NexoraBot/1.0"}
-    if INTERNAL_API_KEY:
-        headers["X-Internal-Api-Key"] = INTERNAL_API_KEY
-    req = _urlreq.Request(f"{API_BASE}{path}", headers=headers)
-    try:
-        with _urlreq.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode("utf-8", errors="replace"))
-    except (HTTPError, URLError, Exception):
-        return None
+    status, data = fetch_api_json(path, timeout=timeout)
+    return data if status == 200 else None
 
 
 def _get_remote_catalog():

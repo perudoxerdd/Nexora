@@ -7,6 +7,7 @@ from telegram.ext import ContextTypes
 
 
 CONFIG_FILE_PATH = "config.json"
+OWNER_USERNAME = "@PeruDoxer"
 
 
 def _get_bot_name() -> str:
@@ -31,6 +32,7 @@ async def rules_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     texto = (
         f"<b>{bot_name} REGLAS DEL GRUPO</b>\n\n"
+        f"👑 <b>Dueño oficial:</b> {html.escape(OWNER_USERNAME)}\n\n"
         "🚫 <b>PROHIBIDO CONTENIDO +18</b>\n"
         "No se permite publicar, pedir ni compartir material adulto.\n\n"
         "🚫 <b>PROHIBIDO BÚSQUEDAS -18</b>\n"
@@ -42,7 +44,8 @@ async def rules_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "⭕️ <b>RESPETO AL /STAFF</b>\n"
         "Cualquier falta de respeto al staff puede terminar en sanción o ban.\n\n"
         "⚠️ <b>DNI REPETIDO</b>\n"
-        "Si dos personas consultan el mismo DNI, se baneará a ambos sin reclamos."
+        "Si dos personas consultan el mismo DNI, se baneará a ambos sin reclamos.\n\n"
+        "📌 <b>Usar el bot implica aceptar estas reglas.</b>"
     )
 
     await msg.reply_text(
