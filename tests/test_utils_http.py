@@ -1,4 +1,5 @@
 import os
+import asyncio
 import unittest
 from unittest.mock import patch
 
@@ -46,6 +47,23 @@ class UtilsHttpTest(unittest.TestCase):
         from comandos import utils
 
         self.assertEqual(register.API_BASE, utils.API_BASE)
+
+    def test_fetch_api_json_async_delegates_to_sync_helper(self):
+        from comandos import utils
+
+        async def run_check():
+            with patch.object(utils, "fetch_api_json", return_value=(200, {"status": "ok"})) as fetch_json:
+                status, data = await utils.fetch_api_json_async("/bot_catalog", timeout=3)
+            self.assertEqual(status, 200)
+            self.assertEqual(data["status"], "ok")
+            fetch_json.assert_called_once_with(
+                "/bot_catalog",
+                timeout=3,
+                method="GET",
+                payload=None,
+            )
+
+        asyncio.run(run_check())
 
 
 if __name__ == "__main__":
