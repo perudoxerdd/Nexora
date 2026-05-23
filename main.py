@@ -11,6 +11,7 @@ from comandos.start import start_command
 from comandos.buy import buy_command, buy_callback
 from comandos.me import me_command
 from comandos.register import register_command
+from comandos.rules import rules_command
 from comandos.terminos import terminos_command
 from comandos.cmds import cmds_command, cmds_callback
 from comandos.historial import historial_command
@@ -200,6 +201,7 @@ def _fetch_dynamic_command_slugs() -> list[str]:
         "uncred", "setsub", "sub", "unsub", "setrol", "setantispam", "cmds", "cmdsadmin", "genkey",
         "redeem", "keyslog", "keysinfo", "reply", "pending", "solicitudes", "close", "done", "fail",
         "templates", "rquick", "requestlog", "reopen", "precios",
+        "rules",
     }
     reserved.update(command_name for command_name, *_ in REQUEST_COMMANDS)
     slugs = []
@@ -222,6 +224,7 @@ def main():
     add_command_handler(application, "buy", buy_command)
     add_command_handler(application, "me", me_command)
     add_command_handler(application, "register", register_command)
+    add_command_handler(application, "rules", rules_command)
     add_command_handler(application, "terminos", terminos_command)
     add_command_handler(application, "historial", historial_command, use_antispam=True)
     add_command_handler(application, "compras", compras_command, use_antispam=True)
