@@ -4278,6 +4278,8 @@ def internal_admin_worker_event():
     if event == "polling_conflict":
         save_panel_setting_value("WORKER_LAST_POLLING_CONFLICT", now)
         log_audit_event("worker.polling_conflict", "telegram", detail[:300], actor=bot_actor())
+    elif event in {"started", "heartbeat"}:
+        save_panel_setting_value("WORKER_LAST_POLLING_CONFLICT", "")
     return jsonify({"status": "ok", "event": event or "heartbeat", "time": now}), 200
 
 

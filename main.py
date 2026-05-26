@@ -205,6 +205,16 @@ async def log_worker_error(update, context):
     print(f"Worker error: {err!r}")
 
 
+async def worker_heartbeat_loop(application):
+    while True:
+        await asyncio.sleep(60)
+        await asyncio.to_thread(notify_worker_event, "heartbeat", "worker polling alive")
+
+
+async def post_init(application):
+    application.create_task(worker_heartbeat_loop(application))
+
+
 def _fetch_dynamic_command_slugs() -> list[str]:
     st, js = _fetch_json(f"{API_DB_BASE}/bot_catalog", timeout=15)
     if st != 200 or (js or {}).get("status") != "ok":
@@ -232,7 +242,7 @@ def _fetch_dynamic_command_slugs() -> list[str]:
 # ---------- Main ----------
 def main():
     admin_requests.init_db()
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
+    application = Application.builder().token(TELEGRAM_TOKEN).post_init(post_init).build()
     application.add_error_handler(log_worker_error)
 
     # Públicos / generales
@@ -311,7 +321,7 @@ def main():
 
     print("Bot started and polling for updates...")
     notify_worker_event("started", "worker polling started")
-    application.run_polling()
+    application.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
