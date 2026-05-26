@@ -149,9 +149,9 @@ def _build_buy_text(bot_arroba: str, section: str = "all") -> str:
     credit_items = sum(len(group.get("items") or []) for group in groups.get("credits", []))
     day_items = sum(len(group.get("items") or []) for group in groups.get("days", []))
     parts = [
-        "<b>NEXORA STORE</b>",
-        f"<b>{bot_arroba}</b> · paquetes activos y vendedores autorizados",
-        f"Catalogo: <code>{credit_items}</code> paquetes de creditos · <code>{day_items}</code> planes por dias",
+        "💎 <b>NEXORA STORE</b>",
+        f"⚡ <b>{bot_arroba}</b> · acceso premium y créditos al instante",
+        f"📦 Catálogo activo: <code>{credit_items}</code> paquetes de créditos · <code>{day_items}</code> paquetes por días",
     ]
 
     show_credits = section in {"all", "credits"}
@@ -159,7 +159,7 @@ def _build_buy_text(bot_arroba: str, section: str = "all") -> str:
 
     if show_credits:
         parts.append("")
-        parts.append("<b>Creditos para consultas</b>")
+        parts.append("💰 <b>Créditos para consultas</b>")
         parts.append("")
         if groups["credits"]:
             for group in groups["credits"]:
@@ -168,12 +168,12 @@ def _build_buy_text(bot_arroba: str, section: str = "all") -> str:
                     parts.append(f"  └ {item}")
                 parts.append("")
         else:
-            parts.append("Aun no hay paquetes de creditos configurados.")
+            parts.append("⚠️ Aún no hay paquetes de créditos configurados.")
             parts.append("")
 
     if show_days:
         parts.append("")
-        parts.append("<b>Planes por tiempo</b>")
+        parts.append("⏳ <b>Planes por tiempo</b>")
         parts.append("")
         if groups["days"]:
             for group in groups["days"]:
@@ -182,12 +182,12 @@ def _build_buy_text(bot_arroba: str, section: str = "all") -> str:
                     parts.append(f"  └ {item}")
                 parts.append("")
         else:
-            parts.append("Aun no hay planes por dias configurados.")
+            parts.append("⚠️ Aún no hay planes por días configurados.")
             parts.append("")
 
-    parts.append("<b>Antes de comprar</b> revisa /terminos")
+    parts.append("🛡️ <b>Antes de comprar</b> revisa /terminos")
     parts.append("")
-    parts.append("Elige un vendedor autorizado para completar tu compra.")
+    parts.append("👇 Elige un vendedor autorizado para completar tu compra.")
     return "\n".join(parts).strip()
 
 
@@ -195,8 +195,8 @@ def _build_buy_keyboard(settings: dict) -> InlineKeyboardMarkup:
     rows = [
         [
             InlineKeyboardButton("Todos", callback_data="buy:all"),
-            InlineKeyboardButton("Creditos", callback_data="buy:credits"),
-            InlineKeyboardButton("Dias", callback_data="buy:days"),
+            InlineKeyboardButton("Créditos", callback_data="buy:credits"),
+            InlineKeyboardButton("Días", callback_data="buy:days"),
         ]
     ]
 
@@ -204,7 +204,7 @@ def _build_buy_keyboard(settings: dict) -> InlineKeyboardMarkup:
     owner_text = settings.get("BT_OWNER") or cfg.get("BT_OWNER") or DEFAULT_OWNER_TEXT
     owner_link = settings.get("OWNER_LINK") or cfg.get("OWNER_LINK") or DEFAULT_OWNER_LINK
     if non_empty(owner_text) and non_empty(owner_link):
-        buttons.append(btn(owner_text, owner_link))
+        buttons.append(btn(f"[❄️] {owner_text}", owner_link))
 
     sellers = [
         (settings.get("BT_SELLER") or cfg.get("BT_SELLER"), settings.get("SELLER_LINK") or cfg.get("SELLER_LINK")),
@@ -214,7 +214,7 @@ def _build_buy_keyboard(settings: dict) -> InlineKeyboardMarkup:
     ]
     for text, url in sellers:
         if non_empty(text) and non_empty(url):
-            buttons.append(btn(text, url))
+            buttons.append(btn(f"[❄️] {text}", url))
 
     for i in range(0, len(buttons), 2):
         rows.append(buttons[i:i + 2])

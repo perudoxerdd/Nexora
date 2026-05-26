@@ -390,9 +390,10 @@ def _home_caption(cfg: dict, user) -> str:
     nombre = html.escape(user.first_name or "Usuario")
     link = _user_link(user)
     return (
-        f"<b>{bot_name} COMANDOS</b>\n\n"
-        f"Hola, <a href=\"{link}\">{nombre}</a>.\n"
-        "Elige una categoria para ver uso, plan requerido y costo."
+        f"<b>{bot_name} CENTRO DE COMANDOS</b>\n\n"
+        f"👋 Hola, <a href=\"{link}\">{nombre}</a>\n\n"
+        "🧭 Elige una categoría y encuentra rápido la consulta que necesitas.\n"
+        "⚡ Cada comando muestra ejemplo, costo y estado en tiempo real."
     )
 
 
@@ -405,14 +406,15 @@ def _category_caption(cfg: dict, category: dict, commands: list[dict], page: int
     items = commands[start:end]
 
     lines = [
-        f"<b>{bot_name}</b> <i>CATALOGO</i>",
-        f"<b>Categoria:</b> <code>{html.escape(category['name'])}</code>",
-        f"<b>Comandos:</b> <code>{total_commands}</code> · <b>Pagina:</b> <code>{page}/{total_pages}</code>",
+        f"<b>{bot_name}</b> <i>CATÁLOGO ACTIVO</i>",
+        f"🏷️ <b>Categoría</b> ⇒ <code>{html.escape(category['name'])} {_category_icon(category)}</code>",
+        f"🧩 <b>Comandos</b> ⇒ <code>{total_commands}</code> disponibles",
+        f"📖 <b>Página</b> ⇒ <code>{page}/{total_pages}</code>",
         "",
     ]
 
     if not items:
-        lines.append("Esta categoria todavia no tiene comandos activos.")
+        lines.append("⚠️ Esta categoría todavía no tiene comandos activos.")
         return "\n".join(lines)
 
     for cmd in items:
@@ -421,11 +423,13 @@ def _category_caption(cfg: dict, category: dict, commands: list[dict], page: int
         desc = cmd.get("description") or fallback.get("description") or "Sin descripción."
         is_active = bool(cmd.get("is_active"))
         lines.extend([
-            f"<b>{html.escape(cmd['name'])}</b>",
-            f"Estado: <b>{'ACTIVO' if is_active else 'INACTIVO'}</b> · Plan: <code>{html.escape(_command_plan_label(cmd))}</code>",
-            f"Uso: <code>{html.escape(usage)}</code>",
-            f"Costo: <code>{int(cmd['cost'])} creditos</code>",
-            f"<i>{html.escape(desc)}</i>",
+            f"🔹 <b>{html.escape(cmd['name'])}</b>",
+            "┈┈┈┈┈┈┈┈┈┈",
+            f"{'🟢' if is_active else '🔴'} <b>Estado</b> ⇒ <b>{'ACTIVO' if is_active else 'INACTIVO'}</b>",
+            f"💎 <b>Plan</b> ⇒ <code>{html.escape(_command_plan_label(cmd))}</code>",
+            f"⌨️ <b>Uso</b> ⇒ <code>{html.escape(usage)}</code>",
+            f"💳 <b>Costo</b> ⇒ <code>{int(cmd['cost'])} créditos</code>",
+            f"📌 <b>Detalle</b> ⇒ <i>{html.escape(desc)}</i>",
             "",
         ])
 
