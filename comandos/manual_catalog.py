@@ -330,12 +330,13 @@ async def manual_catalog_command(update: Update, context: ContextTypes.DEFAULT_T
         return
 
     loading_ft, loading_txt = _loader_assets(command_slug, command_cfg.get("category_slug"))
+    status_message = None
     try:
         if loading_ft:
-            await msg.reply_photo(photo=loading_ft, caption=loading_txt, parse_mode="HTML")
+            status_message = await msg.reply_photo(photo=loading_ft, caption=loading_txt, parse_mode="HTML")
         else:
-            await msg.reply_text(loading_txt, parse_mode="HTML")
+            status_message = await msg.reply_text(loading_txt, parse_mode="HTML")
     except Exception:
         pass
 
-    await create_request(update, context, command_slug, cost=required_credits)
+    await create_request(update, context, command_slug, cost=required_credits, status_message=status_message)

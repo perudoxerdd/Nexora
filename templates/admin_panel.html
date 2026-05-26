@@ -104,7 +104,32 @@
     body.dark input::placeholder, body.dark textarea::placeholder { color:#7f938a; }
     body.dark .telegram-bubble { border:1px solid rgba(255,255,255,.06); }
     @media (max-width: 1100px) { .layout, .grid, .section-grid, .summary, .three, .preview-grid, .command-tools, .compact-profile, .sales-strip { grid-template-columns:1fr; } .sidebar { position:static; } .toolbar { align-items:stretch; flex-direction:column; } .toolbar-right, .search-form { width:100%; } .search-form { min-width:0; } .search-form input { min-width:0; } }
-    @media (max-width: 760px) { .wrap { padding:10px; } .hero, .card { border-radius:12px; padding:12px; } .hero { margin-bottom:12px; } h1 { font-size:26px; } h2 { font-size:22px; } .layout, .content { gap:12px; } .sidebar { grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; } .side-link { padding:10px; text-align:center; font-size:14px; } .inline, .profile-facts { grid-template-columns:1fr; } table { display:block; overflow-x:auto; white-space:nowrap; font-size:13px; } th, td { padding:8px 6px; } .metric { padding:12px; } .metric h3, .sales-card h3 { font-size:22px; overflow-wrap:anywhere; } input, select, textarea, button { min-height:42px; } .subnav, .toolbar-right, .actions { align-items:stretch; flex-direction:column; } .subnav a { text-align:center; } .command-edit form { min-width:0; } }
+    @media (max-width: 760px) {
+      .wrap { padding:10px; }
+      .hero, .card { border-radius:12px; padding:12px; box-shadow:none; }
+      .hero { margin-bottom:12px; }
+      h1 { font-size:24px; }
+      h2 { font-size:20px; }
+      .layout, .content { gap:12px; }
+      .sidebar { display:flex; overflow-x:auto; gap:8px; padding-bottom:4px; scroll-snap-type:x mandatory; }
+      .side-link { flex:0 0 auto; min-width:132px; padding:10px; text-align:center; font-size:13px; scroll-snap-align:start; }
+      .inline, .profile-facts { grid-template-columns:1fr; }
+      .toolbar-right, .search-form { flex-direction:column; align-items:stretch; gap:8px; }
+      .search-form button, .theme-toggle { width:100%; }
+      .subnav { display:flex; overflow-x:auto; flex-wrap:nowrap; padding-bottom:4px; }
+      .subnav a { flex:0 0 auto; text-align:center; white-space:nowrap; }
+      table { display:block; overflow:auto; white-space:nowrap; font-size:12px; max-height:70vh; border:1px solid var(--line); border-radius:12px; }
+      thead th { position:sticky; top:0; z-index:1; background:var(--card); }
+      th, td { padding:8px 6px; }
+      td { max-width:240px; overflow:hidden; text-overflow:ellipsis; }
+      td details, td form, td .small { white-space:normal; }
+      .actions { display:grid; grid-template-columns:1fr; align-items:stretch; }
+      .metric { padding:12px; }
+      .metric h3, .sales-card h3 { font-size:22px; overflow-wrap:anywhere; }
+      input, select, textarea, button { min-height:42px; }
+      .command-edit form { min-width:0; }
+      .preview-grid { display:none; }
+    }
   </style>
 </head>
 <body>
@@ -140,6 +165,9 @@
         <strong>Alerta Telegram polling:</strong>
         se detectó otro proceso usando el mismo token.
         <span class="small">Último conflicto: {{ health_summary.runtime.last_polling_conflict }}</span>
+        <form method="post" action="{{ url_for('admin_clear_polling_alert') }}" style="margin-top:10px; max-width:240px;">
+          <button class="secondary" type="submit">Limpiar alerta</button>
+        </form>
       </div>
       {% endif %}
       <p class="small">Panel privado NEXORA conectado a tu entorno de producción.</p>
@@ -1507,7 +1535,12 @@
             </div>
             <p class="small">API base actual: <code>{{ health_summary.runtime.api_base or 'NO CONFIG' }}</code></p>
             {% if health_summary.runtime.last_polling_conflict %}
-            <div class="flash alert-card"><strong>Conflicto de polling:</strong> {{ health_summary.runtime.last_polling_conflict }}. Revisa tokens duplicados o servicios viejos encendidos.</div>
+            <div class="flash alert-card">
+              <strong>Conflicto de polling:</strong> {{ health_summary.runtime.last_polling_conflict }}. Revisa tokens duplicados o servicios viejos encendidos.
+              <form method="post" action="{{ url_for('admin_clear_polling_alert') }}" style="margin-top:10px; max-width:240px;">
+                <button class="secondary" type="submit">Limpiar alerta vieja</button>
+              </form>
+            </div>
             {% endif %}
           </div>
           <div class="card">

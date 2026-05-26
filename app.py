@@ -4232,6 +4232,16 @@ def internal_admin_worker_event():
     return jsonify({"status": "ok", "event": event or "heartbeat", "time": now}), 200
 
 
+@app.route("/admin/clear-polling-alert", methods=["POST"])
+def admin_clear_polling_alert():
+    gate = require_panel_roles("FUNDADOR", "CO-FUNDADOR")
+    if gate:
+        return gate
+    save_panel_setting_value("WORKER_LAST_POLLING_CONFLICT", "")
+    log_audit_event("worker.polling_conflict.clear", "telegram", "alert cleared")
+    return redirect(url_for("admin_panel", section="sistema", flash="Alerta de polling limpiada."))
+
+
 # Templates del panel movidos a templates/admin_panel.html y templates/admin_login.html
 
 @app.route("/admin/panel", methods=["GET"])

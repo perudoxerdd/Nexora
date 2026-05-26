@@ -823,7 +823,27 @@ async def _update_admin_message_markup(context: ContextTypes.DEFAULT_TYPE, reque
         pass
 
 
-async def create_request(update: Update, context: ContextTypes.DEFAULT_TYPE, command: str, cost: int = 1, user_info: dict | None = None):
+async def _edit_or_reply_user_status(message, status_message, text: str):
+    if status_message:
+        try:
+            if getattr(status_message, "photo", None):
+                await status_message.edit_caption(caption=text, parse_mode="HTML")
+            else:
+                await status_message.edit_text(text, parse_mode="HTML")
+            return
+        except Exception:
+            pass
+    await message.reply_text(text, parse_mode="HTML")
+
+
+async def create_request(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    command: str,
+    cost: int = 1,
+    user_info: dict | None = None,
+    status_message=None,
+):
     user = update.effective_user
     message = update.message
     from comandos.utils import get_command_runtime_config
@@ -879,7 +899,7 @@ async def create_request(update: Update, context: ContextTypes.DEFAULT_TYPE, com
     _sync_request_by_id(request_id)
     _log_historial(user.id, command, payload)
 
-    await message.reply_text(
+    user_status_text = (
         "\n".join(
             [
                 "<b>#NEXORA ⇒ SOLICITUD RECIBIDA</b>",
@@ -891,9 +911,9 @@ async def create_request(update: Update, context: ContextTypes.DEFAULT_TYPE, com
                 "",
                 "Tu pedido entró al panel de atención. Te avisaremos cuando esté listo.",
             ]
-        ),
-        parse_mode="HTML",
+        )
     )
+    await _edit_or_reply_user_status(message, status_message, user_status_text)
 
     admin_chat_id = primary_admin_id()
     if admin_chat_id is None:

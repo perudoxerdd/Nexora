@@ -300,15 +300,16 @@ async def handle_request_command(
 
     loader_category = command_cfg.get("category_slug") or category_slug
     loading_ft, loading_txt = _loader_assets(loader_category)
+    status_message = None
     try:
         if loading_ft:
-            await msg.reply_photo(photo=loading_ft, caption=loading_txt, parse_mode="HTML")
+            status_message = await msg.reply_photo(photo=loading_ft, caption=loading_txt, parse_mode="HTML")
         else:
-            await msg.reply_text(loading_txt, parse_mode="HTML")
+            status_message = await msg.reply_text(loading_txt, parse_mode="HTML")
     except Exception:
         pass
 
-    await create_request(update, context, command, cost=required_credits, user_info=info_usuario)
+    await create_request(update, context, command, cost=required_credits, user_info=info_usuario, status_message=status_message)
 
 
 def make_request_command(command: str, default_cost: int, category_slug: str, validation: str):
