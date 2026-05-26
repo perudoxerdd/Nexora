@@ -22,7 +22,6 @@ from comandos.admin_ops import (
     setsub_command, sub_command, unsub_command,
     setrol_command, setantispam_command
 )
-from comandos.cmdsadmin import cmdsadmin_command
 from comandos.precios import precios_command
 from comandos.genkey import genkey, redeem, keyslog, keysinfo
 from comandos import admin_requests
@@ -30,7 +29,7 @@ from comandos.manual_catalog import manual_catalog_command
 from comandos.request_catalog import REQUEST_COMMANDS, make_request_command
 from comandos.system_ops import status_command, panel_command, backup_command
 from comandos.broadcast import global_callback, global_command
-from comandos.helpadmin import helpadmin_command
+from comandos.helpadmin import admin_menu_callback, admin_menu_command
 from comandos.admin_tools import (
     admin_tools_callback,
     ban_command,
@@ -175,7 +174,7 @@ def _fetch_dynamic_command_slugs() -> list[str]:
     commands = ((js or {}).get("data") or {}).get("commands") or []
     reserved = {
         "start", "buy", "me", "register", "terminos", "historial", "compras", "status", "panel", "backup",
-        "global", "helpadmin", "dm", "ban", "unban", "user", "ventas", "errores", "setcred", "cred",
+        "global", "admin", "helpadmin", "dm", "ban", "unban", "user", "ventas", "errores", "setcred", "cred",
         "uncred", "setsub", "sub", "unsub", "setrol", "setantispam", "cmds", "cmdsadmin", "genkey",
         "redeem", "keyslog", "keysinfo", "reply", "pending", "solicitudes", "close", "done", "fail",
         "templates", "rquick", "requestlog", "reopen", "precios",
@@ -211,7 +210,8 @@ def main():
     add_command_handler(application, "panel", panel_command)
     add_command_handler(application, "backup", backup_command)
     add_command_handler(application, "global", global_command)
-    add_command_handler(application, "helpadmin", helpadmin_command)
+    add_command_handler(application, "admin", admin_menu_command)
+    add_command_handler(application, "helpadmin", admin_menu_command)
     add_command_handler(application, "dm", dm_command)
     add_command_handler(application, "ban", ban_command)
     add_command_handler(application, "unban", unban_command)
@@ -238,7 +238,8 @@ def main():
     application.add_handler(CallbackQueryHandler(global_callback, pattern="^global_"))
     application.add_handler(CallbackQueryHandler(admin_tools_callback, pattern="^admintool:"))
     application.add_handler(CallbackQueryHandler(admin_requests.request_buttons_callback, pattern="^adminreq:"))
-    add_command_handler(application, "cmdsadmin", cmdsadmin_command)
+    application.add_handler(CallbackQueryHandler(admin_menu_callback, pattern="^adminmenu:"))
+    add_command_handler(application, "cmdsadmin", admin_menu_command)
     
     # Consultas manuales del catálogo. Todas comparten validación, créditos,
     # loader y creación de solicitud al admin.
