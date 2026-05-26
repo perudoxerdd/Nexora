@@ -2453,16 +2453,22 @@ def get_runtime_status() -> dict:
     storage = get_storage_snapshot()
     last_worker_seen = settings.get("WORKER_LAST_SEEN") or ""
     last_conflict = settings.get("WORKER_LAST_POLLING_CONFLICT") or ""
+    current_api_base = (
+        os.environ.get("NEXORA_API_BASE")
+        or os.environ.get("SPIDERSYN_API_BASE")
+        or os.environ.get("API_BASE")
+        or os.environ.get("API_DB_BASE")
+        or ""
+    ).strip().rstrip("/")
+    if not current_api_base:
+        try:
+            current_api_base = request.url_root.rstrip("/")
+        except Exception:
+            current_api_base = ""
     return {
         "web_online": True,
         "worker_online": bool(last_worker_seen),
-        "api_base": (
-            os.environ.get("NEXORA_API_BASE")
-            or os.environ.get("SPIDERSYN_API_BASE")
-            or os.environ.get("API_BASE")
-            or os.environ.get("API_DB_BASE")
-            or ""
-        ),
+        "api_base": current_api_base,
         "data_volume": storage.get("railway_mount") or storage.get("data_dir") or "",
         "last_worker_seen": last_worker_seen,
         "last_polling_conflict": last_conflict,
