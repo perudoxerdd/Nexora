@@ -212,7 +212,7 @@ async def worker_heartbeat_loop(application):
 
 
 async def post_init(application):
-    application.create_task(worker_heartbeat_loop(application))
+    asyncio.create_task(worker_heartbeat_loop(application))
 
 
 def _fetch_dynamic_command_slugs() -> list[str]:
