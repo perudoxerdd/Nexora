@@ -90,7 +90,9 @@ def _request_row_to_payload(row) -> dict:
         origin_chat_id,
         origin_message_id,
         origin_chat_type,
-    ) = row[:22]
+        user_status_chat_id,
+        user_status_message_id,
+    ) = row[:24]
     return {
         "id": request_id,
         "user_id": user_id,
@@ -114,6 +116,8 @@ def _request_row_to_payload(row) -> dict:
         "origin_chat_id": origin_chat_id,
         "origin_message_id": origin_message_id,
         "origin_chat_type": origin_chat_type or "",
+        "user_status_chat_id": user_status_chat_id,
+        "user_status_message_id": user_status_message_id,
     }
 
 
@@ -193,7 +197,9 @@ def init_db():
             attachment_caption TEXT DEFAULT '',
             origin_chat_id INTEGER,
             origin_message_id INTEGER,
-            origin_chat_type TEXT DEFAULT ''
+            origin_chat_type TEXT DEFAULT '',
+            user_status_chat_id INTEGER,
+            user_status_message_id INTEGER
         )
         """
     )
@@ -230,6 +236,9 @@ def init_db():
     for col_name in ("origin_chat_id", "origin_message_id"):
         if col_name not in columns:
             c.execute(f"ALTER TABLE requests ADD COLUMN {col_name} INTEGER")
+    for col_name in ("user_status_chat_id", "user_status_message_id"):
+        if col_name not in columns:
+            c.execute(f"ALTER TABLE requests ADD COLUMN {col_name} INTEGER")
     c.execute("PRAGMA table_info(request_templates)")
     template_columns = {row[1] for row in c.fetchall()}
     if "command" not in template_columns:
@@ -257,7 +266,7 @@ def _get_request_by_id(cursor, request_id: int):
         SELECT id, user_id, username, command, payload, status, admin_msg_id, cost, charged, delivery_count,
                created_at, resolved_at, resolved_by, resolution_note,
                attachment_type, attachment_file_id, attachment_file_unique_id, attachment_file_name, attachment_caption,
-               origin_chat_id, origin_message_id, origin_chat_type
+               origin_chat_id, origin_message_id, origin_chat_type, user_status_chat_id, user_status_message_id
         FROM requests
         WHERE id=?
         """,
@@ -272,7 +281,7 @@ def _get_request_by_admin_message(cursor, admin_msg_id: int):
         SELECT id, user_id, username, command, payload, status, admin_msg_id, cost, charged, delivery_count,
                created_at, resolved_at, resolved_by, resolution_note,
                attachment_type, attachment_file_id, attachment_file_unique_id, attachment_file_name, attachment_caption,
-               origin_chat_id, origin_message_id, origin_chat_type
+               origin_chat_id, origin_message_id, origin_chat_type, user_status_chat_id, user_status_message_id
         FROM requests
         WHERE admin_msg_id=?
         """,
@@ -300,13 +309,54 @@ def _delivery_target(row) -> tuple[int, int | None]:
     return chat_id, reply_to
 
 
+def _status_edit_target(row) -> tuple[int | None, int | None]:
+    status_chat_id = row[22] if len(row) > 22 else None
+    status_message_id = row[23] if len(row) > 23 else None
+    try:
+        chat_id = int(status_chat_id) if status_chat_id not in (None, "") else None
+        message_id = int(status_message_id) if status_message_id not in (None, "") else None
+    except Exception:
+        return None, None
+    return chat_id, message_id
+
+
 async def _send_delivery_message(context: ContextTypes.DEFAULT_TYPE, row, text: str, *, parse_mode: str = "HTML"):
+    status_chat_id, status_message_id = _status_edit_target(row)
+    if status_chat_id and status_message_id:
+        try:
+            await context.bot.edit_message_text(
+                chat_id=status_chat_id,
+                message_id=status_message_id,
+                text=text,
+                parse_mode=parse_mode,
+            )
+            return
+        except Exception:
+            try:
+                await context.bot.edit_message_caption(
+                    chat_id=status_chat_id,
+                    message_id=status_message_id,
+                    caption=text,
+                    parse_mode=parse_mode,
+                )
+                return
+            except Exception:
+                pass
     chat_id, reply_to = _delivery_target(row)
     kwargs = {"chat_id": chat_id, "text": text, "parse_mode": parse_mode}
     if reply_to:
         kwargs["reply_to_message_id"] = reply_to
         kwargs["allow_sending_without_reply"] = True
     await context.bot.send_message(**kwargs)
+
+
+async def _delete_message_silent(context: ContextTypes.DEFAULT_TYPE, chat_id, message_id):
+    if not chat_id or not message_id:
+        return
+    try:
+        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except Exception:
+        pass
 
 
 def _trim(text: str | None, limit: int = 90) -> str:
@@ -525,6 +575,14 @@ def _append_note(previous: str | None, note: str) -> str:
     return f"{previous_clean}\n{stamped}"
 
 
+def _latest_request_note(notes: str | None) -> str:
+    lines = [line.strip() for line in (notes or "").splitlines() if line.strip()]
+    if not lines:
+        return ""
+    latest = lines[-1]
+    return re.sub(r"^\[[^\]]+\]\s*", "", latest).strip()
+
+
 def _mark_request_delivery(cursor, request_id: int, admin_id: int | None, note: str, *, charged: int | None = None, resolved: bool = False):
     row = _get_request_by_id(cursor, request_id)
     if not row:
@@ -623,8 +681,12 @@ def _build_template_keyboard(request_id: int):
     return InlineKeyboardMarkup(rows)
 
 
-def _set_action_state(context: ContextTypes.DEFAULT_TYPE, action: str, request_id: int):
-    context.user_data[REQUEST_ACTION_KEY] = {"action": action, "request_id": request_id}
+def _set_action_state(context: ContextTypes.DEFAULT_TYPE, action: str, request_id: int, prompt_message=None):
+    state = {"action": action, "request_id": request_id}
+    if prompt_message:
+        state["prompt_chat_id"] = getattr(prompt_message, "chat_id", None)
+        state["prompt_message_id"] = getattr(prompt_message, "message_id", None)
+    context.user_data[REQUEST_ACTION_KEY] = state
 
 
 def _remember_request(context: ContextTypes.DEFAULT_TYPE, request_id: int):
@@ -638,6 +700,23 @@ def _clear_action_state(context: ContextTypes.DEFAULT_TYPE):
         context.user_data[REQUEST_ACTION_KEY] = {"action": "last", "request_id": request_id}
     else:
         context.user_data.pop(REQUEST_ACTION_KEY, None)
+
+
+async def _cleanup_followup_messages(context: ContextTypes.DEFAULT_TYPE, update: Update, state: dict):
+    await _delete_message_silent(context, state.get("prompt_chat_id"), state.get("prompt_message_id"))
+    if update.message:
+        await _delete_message_silent(context, update.message.chat_id, update.message.message_id)
+
+
+async def _finish_admin_command(context: ContextTypes.DEFAULT_TYPE, update: Update, ok: bool, msg: str, request_id: int | None = None):
+    if ok:
+        if request_id:
+            _remember_request(context, request_id)
+        if update.message:
+            await _delete_message_silent(context, update.message.chat_id, update.message.message_id)
+        return
+    if update.message:
+        await update.message.reply_text(msg)
 
 
 async def _send_request_reply(context: ContextTypes.DEFAULT_TYPE, admin_id: int, request_id: int, reply_text: str):
@@ -697,7 +776,11 @@ async def _done_request_by_id(context: ContextTypes.DEFAULT_TYPE, admin_id: int,
         return False, f"⚠️ La solicitud #{request_id} ya está en estado {status}."
 
     final_note = note or "✅ Tu solicitud fue completada por el equipo NEXORA."
-    await _send_delivery_message(context, row, _user_request_card("SOLICITUD FINALIZADA", request_id, command, final_note))
+    latest_reply = _latest_request_note(resolution_note)
+    body = final_note
+    if latest_reply:
+        body = f"{latest_reply}\n\n{final_note}"
+    await _send_delivery_message(context, row, _user_request_card("SOLICITUD FINALIZADA", request_id, command, body))
     _update_request_status(c, request_id, "resolved", admin_id, _append_note(resolution_note, final_note))
     conn.commit()
     conn.close()
@@ -830,10 +913,10 @@ async def _edit_or_reply_user_status(message, status_message, text: str):
                 await status_message.edit_caption(caption=text, parse_mode="HTML")
             else:
                 await status_message.edit_text(text, parse_mode="HTML")
-            return
+            return status_message
         except Exception:
             pass
-    await message.reply_text(text, parse_mode="HTML")
+    return await message.reply_text(text, parse_mode="HTML")
 
 
 async def create_request(
@@ -913,7 +996,18 @@ async def create_request(
             ]
         )
     )
-    await _edit_or_reply_user_status(message, status_message, user_status_text)
+    user_status_message = await _edit_or_reply_user_status(message, status_message, user_status_text)
+    user_status_chat_id = getattr(user_status_message, "chat_id", None)
+    user_status_message_id = getattr(user_status_message, "message_id", None)
+    if user_status_chat_id and user_status_message_id:
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        c.execute(
+            "UPDATE requests SET user_status_chat_id=?, user_status_message_id=? WHERE id=?",
+            (user_status_chat_id, user_status_message_id, request_id),
+        )
+        conn.commit()
+        conn.close()
 
     admin_chat_id = primary_admin_id()
     if admin_chat_id is None:
@@ -972,7 +1066,7 @@ async def reply_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     ok, msg = await _send_request_reply(context, update.effective_user.id, request_id, reply_text)
-    await update.message.reply_text(msg)
+    await _finish_admin_command(context, update, ok, msg, request_id)
 
 
 async def forward_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1059,7 +1153,7 @@ async def done_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     _clear_action_state(context)
     ok, msg = await _done_request_by_id(context, update.effective_user.id, request_id, note)
-    await update.message.reply_text(msg)
+    await _finish_admin_command(context, update, ok, msg, request_id)
 
 
 async def close_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1081,7 +1175,7 @@ async def close_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     ok, msg = await _close_request_by_id(context, update.effective_user.id, request_id, note)
-    await update.message.reply_text(msg)
+    await _finish_admin_command(context, update, ok, msg, request_id)
 
 
 async def fail_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1103,7 +1197,7 @@ async def fail_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     ok, msg = await _fail_request_by_id(context, update.effective_user.id, request_id, note)
-    await update.message.reply_text(msg)
+    await _finish_admin_command(context, update, ok, msg, request_id)
 
 
 async def templates_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1149,9 +1243,7 @@ async def quick_reply_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     ok, msg = await _send_template_by_id(context, update.effective_user.id, request_id, template_key)
-    if ok:
-        _remember_request(context, request_id)
-    await update.message.reply_text(msg)
+    await _finish_admin_command(context, update, ok, msg, request_id)
 
 
 async def pending_requests_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1258,13 +1350,13 @@ async def request_buttons_callback(update: Update, context: ContextTypes.DEFAULT
         return
 
     if action == "reply":
-        _set_action_state(context, "reply", request_id)
-        await query.message.reply_text(f"Escribe la respuesta para la solicitud #{request_id}. Se enviará al usuario cuando mandes el siguiente mensaje.")
+        prompt = await query.message.reply_text(f"Escribe la respuesta para la solicitud #{request_id}.")
+        _set_action_state(context, "reply", request_id, prompt)
         return
 
     if action == "replyfree":
-        _set_action_state(context, "replyfree", request_id)
-        await query.message.reply_text(f"Escribe la respuesta sin cobro para la solicitud #{request_id}.")
+        prompt = await query.message.reply_text(f"Escribe la respuesta sin cobro para la solicitud #{request_id}.")
+        _set_action_state(context, "replyfree", request_id, prompt)
         return
 
     if action == "templates":
@@ -1276,23 +1368,24 @@ async def request_buttons_callback(update: Update, context: ContextTypes.DEFAULT
         return
 
     if action == "close":
-        _set_action_state(context, "close", request_id)
-        await query.message.reply_text(f"Escribe el motivo para cerrar la solicitud #{request_id} o manda solo un punto `.` para usar el texto por defecto.")
+        prompt = await query.message.reply_text(f"Escribe el motivo para cerrar la solicitud #{request_id} o manda solo un punto `.` para usar el texto por defecto.")
+        _set_action_state(context, "close", request_id, prompt)
         return
 
     if action == "done":
-        _set_action_state(context, "done", request_id)
-        await query.message.reply_text(f"Escribe un cierre final para la solicitud #{request_id} o manda solo un punto `.` para usar el texto por defecto.")
+        prompt = await query.message.reply_text(f"Escribe un cierre final para la solicitud #{request_id} o manda solo un punto `.` para usar el texto por defecto.")
+        _set_action_state(context, "done", request_id, prompt)
         return
 
     if action == "fail":
-        _set_action_state(context, "fail", request_id)
-        await query.message.reply_text(f"Escribe el motivo de la falla para la solicitud #{request_id} o manda solo un punto `.` para usar el texto por defecto.")
+        prompt = await query.message.reply_text(f"Escribe el motivo de la falla para la solicitud #{request_id} o manda solo un punto `.` para usar el texto por defecto.")
+        _set_action_state(context, "fail", request_id, prompt)
         return
 
     if action == "reopen":
         ok, msg = await _reopen_request_by_id(context, update.effective_user.id, request_id)
-        await query.message.reply_text(msg)
+        if not ok:
+            await query.message.reply_text(msg)
         return
 
     if action == "tpl" and len(parts) >= 4:
@@ -1300,7 +1393,8 @@ async def request_buttons_callback(update: Update, context: ContextTypes.DEFAULT
         ok, msg = await _send_template_by_id(context, update.effective_user.id, request_id, template_key)
         if ok:
             _remember_request(context, request_id)
-        await query.message.reply_text(msg)
+        else:
+            await query.message.reply_text(msg)
         return
 
 
@@ -1327,7 +1421,11 @@ async def admin_followup_message(update: Update, context: ContextTypes.DEFAULT_T
             await update.message.reply_text("❌ La respuesta no puede estar vacía.")
             return
         ok, msg = await _send_request_reply(context, update.effective_user.id, request_id, text)
-        await update.message.reply_text(msg)
+        if ok:
+            _remember_request(context, request_id)
+            await _cleanup_followup_messages(context, update, state)
+        else:
+            await update.message.reply_text(msg)
         return
 
     if action == "replyfree":
@@ -1335,22 +1433,35 @@ async def admin_followup_message(update: Update, context: ContextTypes.DEFAULT_T
             await update.message.reply_text("❌ La respuesta no puede estar vacía.")
             return
         ok, msg = await _send_request_reply_free(context, update.effective_user.id, request_id, text)
-        await update.message.reply_text(msg)
+        if ok:
+            _remember_request(context, request_id)
+            await _cleanup_followup_messages(context, update, state)
+        else:
+            await update.message.reply_text(msg)
         return
 
     _clear_action_state(context)
 
     if action == "done":
         ok, msg = await _done_request_by_id(context, update.effective_user.id, request_id, text or "✅ Tu solicitud fue completada por el equipo NEXORA.")
-        await update.message.reply_text(msg)
+        if ok:
+            await _cleanup_followup_messages(context, update, state)
+        else:
+            await update.message.reply_text(msg)
         return
 
     if action == "close":
         ok, msg = await _close_request_by_id(context, update.effective_user.id, request_id, text)
-        await update.message.reply_text(msg)
+        if ok:
+            await _cleanup_followup_messages(context, update, state)
+        else:
+            await update.message.reply_text(msg)
         return
 
     if action == "fail":
         ok, msg = await _fail_request_by_id(context, update.effective_user.id, request_id, text)
-        await update.message.reply_text(msg)
+        if ok:
+            await _cleanup_followup_messages(context, update, state)
+        else:
+            await update.message.reply_text(msg)
         return
