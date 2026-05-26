@@ -1479,13 +1479,32 @@
         <div class="section-grid">
           <div class="card">
             <h2>Respaldo</h2>
-            <p class="small">Exporta o importa el catálogo completo del panel.</p>
-            <p><a href="{{ url_for('admin_export_panel') }}">Descargar respaldo JSON</a></p>
-            <p><a href="{{ url_for('admin_db_backup_zip') }}">Descargar todas las DB</a></p>
+            <p class="small">Exporta catálogo, descarga DB completas o restaura un ZIP de Nexora.</p>
+            {% if latest_backup %}
+            <div class="mini-card" style="margin-bottom:12px;">
+              <strong>Último backup:</strong> {{ latest_backup.name }}
+              <div class="small">{{ latest_backup.created_at }} · {{ latest_backup.size_label }}</div>
+            </div>
+            {% else %}
+            <p class="small">Aún no hay backups automáticos guardados.</p>
+            {% endif %}
+            <div class="stack" style="margin-bottom:14px;">
+              <a class="side-link" href="{{ url_for('admin_db_backup_zip') }}">Descargar backup completo</a>
+              <a class="side-link" href="{{ url_for('admin_export_panel') }}">Descargar catálogo JSON</a>
+            </div>
+            <form method="post" action="{{ url_for('admin_create_daily_backup') }}" style="margin-bottom:14px;">
+              <button type="submit">Crear backup ahora</button>
+            </form>
             <form method="post" action="{{ url_for('admin_import_panel') }}" enctype="multipart/form-data" data-confirm="¿Importar este respaldo? Se recomienda tener backup antes.">
               <label>Importar archivo JSON</label>
               <input type="file" name="backup_file" accept=".json,application/json" required>
               <button type="submit">Importar respaldo</button>
+            </form>
+            <form method="post" action="{{ url_for('admin_restore_db_backup') }}" enctype="multipart/form-data" data-confirm="¿Restaurar este ZIP? Se creará una copia previa, pero el panel cambiará sus bases de datos.">
+              <label>Restaurar backup completo ZIP</label>
+              <input type="file" name="backup_zip" accept=".zip,application/zip" required>
+              <input name="confirm" placeholder="Escribe RESTAURAR">
+              <button class="danger" type="submit">Restaurar backup</button>
             </form>
           </div>
           <div class="card">
@@ -1574,6 +1593,9 @@
           <div class="card">
             <h2>Backups automáticos</h2>
             <p class="small">Se crea un backup diario cuando el servicio recibe tráfico. Se conservan los últimos 7.</p>
+            {% if latest_backup %}
+            <p class="small">Último: <strong>{{ latest_backup.name }}</strong> · {{ latest_backup.created_at }} · {{ latest_backup.size_label }}</p>
+            {% endif %}
             <form method="post" action="{{ url_for('admin_create_daily_backup') }}" style="margin-bottom:14px;">
               <button type="submit">Crear backup ahora</button>
             </form>
@@ -1583,7 +1605,7 @@
                 {% for backup in daily_backups %}
                 <tr>
                   <td><strong>{{ backup.name }}</strong></td>
-                  <td>{{ backup.size }} bytes</td>
+                  <td>{{ backup.size_label }}</td>
                   <td>{{ backup.created_at }}</td>
                   <td><a href="{{ url_for('admin_download_daily_backup', filename=backup.name) }}">ZIP</a></td>
                 </tr>
@@ -1713,6 +1735,14 @@
           </div>
           <div class="card">
             <h2>Auditoría del panel</h2>
+            <form method="get" action="{{ url_for('admin_panel') }}" class="inline" style="margin-bottom:14px;">
+              <input type="hidden" name="section" value="sistema">
+              <input name="audit_action" value="{{ audit_action }}" placeholder="acción">
+              <input name="audit_actor" value="{{ audit_actor }}" placeholder="actor">
+              <input name="audit_target" value="{{ audit_target }}" placeholder="objetivo">
+              <button type="submit">Filtrar</button>
+              <a href="{{ url_for('admin_panel', section='sistema') }}">Limpiar</a>
+            </form>
             <table>
               <thead><tr><th>ID</th><th>Acción</th><th>Objetivo</th><th>Detalle</th><th>Fecha</th></tr></thead>
               <tbody>

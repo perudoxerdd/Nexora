@@ -2539,16 +2539,18 @@ def get_daily_backups(limit: int = 20):
         folder = backups_dir()
         items = []
         for name in os.listdir(folder):
-            if not (name.startswith(("spidersyn-auto-", "nexora-auto-")) and name.endswith(".zip")):
+            if not (name.startswith(("spidersyn-auto-", "nexora-auto-", "nexora-before-restore-")) and name.endswith(".zip")):
                 continue
             path = os.path.join(folder, name)
             if not os.path.isfile(path):
                 continue
+            size = os.path.getsize(path)
             items.append(
                 {
                     "name": name,
                     "path": path,
-                    "size": os.path.getsize(path),
+                    "size": size,
+                    "size_label": format_bytes(size),
                     "created_at": datetime.fromtimestamp(os.path.getmtime(path)).isoformat(timespec="seconds"),
                 }
             )
@@ -2563,6 +2565,34 @@ def create_db_backup_file(path: str):
         for item in get_storage_snapshot()["items"]:
             if item["exists"]:
                 zf.write(item["path"], arcname=os.path.basename(item["path"]))
+
+
+def format_bytes(size: int) -> str:
+    value = float(size or 0)
+    for unit in ("B", "KB", "MB", "GB"):
+        if value < 1024 or unit == "GB":
+            if unit == "B":
+                return f"{int(value)} {unit}"
+            return f"{value:.1f} {unit}"
+        value /= 1024
+
+
+def create_named_db_backup(prefix: str) -> str:
+    safe_prefix = secure_filename(prefix or "nexora-backup") or "nexora-backup"
+    path = os.path.join(backups_dir(), f"{safe_prefix}-{now_utc().strftime('%Y%m%d%H%M%S')}.zip")
+    tmp_path = path + ".tmp"
+    try:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        create_db_backup_file(tmp_path)
+        os.replace(tmp_path, path)
+    finally:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+    return path
 
 
 def ensure_daily_backup(force: bool = False):
@@ -2647,7 +2677,7 @@ def get_error_logs(limit: int = 50):
         return []
 
 
-def get_audit_logs(limit: int = 80):
+def get_audit_logs(limit: int = 80, action: str = "", actor: str = "", target: str = ""):
     try:
         conn = get_conn(REQUESTS_DB_PATH)
         conn.row_factory = sqlite3.Row
@@ -2665,15 +2695,29 @@ def get_audit_logs(limit: int = 80):
             )
             """
         )
-        cur.execute(
-            """
+        clauses = []
+        params = []
+        if action:
+            clauses.append("LOWER(action) LIKE ?")
+            params.append(f"%{action.strip().lower()}%")
+        if actor:
+            clauses.append("LOWER(actor) LIKE ?")
+            params.append(f"%{actor.strip().lower()}%")
+        if target:
+            clauses.append("LOWER(target) LIKE ?")
+            params.append(f"%{target.strip().lower()}%")
+        query = """
             SELECT id, actor, ip, action, target, details, created_at
             FROM audit_logs
+        """
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += """
             ORDER BY id DESC
             LIMIT ?
-            """,
-            (limit,),
-        )
+        """
+        params.append(limit)
+        cur.execute(query, params)
         rows = [dict(row) for row in cur.fetchall()]
         conn.close()
         return rows
@@ -4354,6 +4398,11 @@ def admin_panel():
     category_filter = request.args.get("category", "")
     status_filter = request.args.get("status", "")
     filtered_commands = filter_catalog_commands(commands, q=q, category=category_filter, status=status_filter)
+    daily_backups = get_daily_backups(limit=10)
+    latest_backup = daily_backups[0] if daily_backups else None
+    audit_action = request.args.get("audit_action", "")
+    audit_actor = request.args.get("audit_actor", "")
+    audit_target = request.args.get("audit_target", "")
     try:
         cmd_page = int(request.args.get("page") or 1)
     except Exception:
@@ -4380,7 +4429,8 @@ def admin_panel():
         global_results=global_results,
         storage=get_storage_snapshot(),
         health_summary=health_summary,
-        daily_backups=get_daily_backups(limit=10),
+        daily_backups=daily_backups,
+        latest_backup=latest_backup,
         panel_role=panel_role,
         panel_user=session.get("panel_user") or PANEL_USER,
         seller_vendor_scope=seller_vendor_scope,
@@ -4389,7 +4439,10 @@ def admin_panel():
         panel_roles=sorted(PANEL_ROLES),
         history_cleanup_preview=get_history_cleanup_preview(),
         error_logs=get_error_logs(limit=50),
-        audit_logs=get_audit_logs(limit=80),
+        audit_logs=get_audit_logs(limit=80, action=audit_action, actor=audit_actor, target=audit_target),
+        audit_action=audit_action,
+        audit_actor=audit_actor,
+        audit_target=audit_target,
         purchases=purchases,
         purchase_user=purchase_user,
         purchase_vendor=purchase_vendor,
@@ -5362,12 +5415,70 @@ def admin_download_daily_backup(filename: str):
     if gate:
         return gate
     safe_name = os.path.basename(filename)
-    if safe_name != filename or not (safe_name.startswith(("spidersyn-auto-", "nexora-auto-")) and safe_name.endswith(".zip")):
+    if safe_name != filename or not (safe_name.startswith(("spidersyn-auto-", "nexora-auto-", "nexora-before-restore-")) and safe_name.endswith(".zip")):
         return jsonify({"status": "error", "message": "Archivo inválido"}), 400
     path = os.path.join(backups_dir(), safe_name)
     if not os.path.exists(path):
         return jsonify({"status": "error", "message": "Backup no encontrado"}), 404
     return send_file(path, mimetype="application/zip", as_attachment=True, download_name=safe_name)
+
+
+@app.route("/admin/backup/db/restore", methods=["POST"])
+def admin_restore_db_backup():
+    gate = require_panel_roles("FUNDADOR")
+    if gate:
+        return gate
+    if (request.form.get("confirm") or "").strip().upper() != "RESTAURAR":
+        return redirect(url_for("admin_panel", section="herramientas", flash="Escribe RESTAURAR para confirmar."))
+    uploaded = request.files.get("backup_zip")
+    if not uploaded:
+        return redirect(url_for("admin_panel", section="herramientas", flash="Falta el archivo ZIP."))
+
+    storage_items = get_storage_snapshot()["items"]
+    allowed_paths = {os.path.basename(item["path"]): item["path"] for item in storage_items}
+    temp_paths = []
+    try:
+        with zipfile.ZipFile(uploaded.stream) as zf:
+            members = {
+                os.path.basename(info.filename): info
+                for info in zf.infolist()
+                if not info.is_dir() and os.path.basename(info.filename)
+            }
+            restore_names = [name for name in allowed_paths if name in members]
+            if not restore_names:
+                return redirect(url_for("admin_panel", section="herramientas", flash="El ZIP no contiene DB reconocidas de Nexora."))
+
+            safety_path = create_named_db_backup("nexora-before-restore")
+            for name in restore_names:
+                target = allowed_paths[name]
+                tmp_path = f"{target}.restore.tmp"
+                with zf.open(members[name]) as src, open(tmp_path, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                temp_paths.append((tmp_path, target))
+
+        for tmp_path, target in temp_paths:
+            os.replace(tmp_path, target)
+        restored = ", ".join(restore_names)
+        safety_name = os.path.basename(safety_path)
+        log_audit_event("backup.restore", uploaded.filename or "backup.zip", f"restored={restored}; safety={safety_name}")
+        return redirect(
+            url_for(
+                "admin_panel",
+                section="herramientas",
+                flash=f"Backup restaurado ({restored}). Copia previa creada: {safety_name}",
+            )
+        )
+    except zipfile.BadZipFile:
+        return redirect(url_for("admin_panel", section="herramientas", flash="ZIP inválido."))
+    except Exception as exc:
+        return redirect(url_for("admin_panel", section="herramientas", flash=f"No se pudo restaurar backup: {exc}"))
+    finally:
+        for tmp_path, _target in temp_paths:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
 
 
 @app.route("/admin/maintenance/cleanup-history", methods=["POST"])
