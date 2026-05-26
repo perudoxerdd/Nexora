@@ -122,6 +122,7 @@ async def genkey(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "usos": usos,
             "total": total,
             "creador_id": user.id,
+            "actor": str(user.id),
         },
     )
     if status != 200 or data.get("status") != "ok":

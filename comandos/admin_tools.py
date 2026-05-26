@@ -4,6 +4,7 @@ import os
 from urllib import parse as _urlparse
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from comandos.bot_errors import api_error_text
 from comandos.utils import configured_admin_ids, fetch_api_json, fetch_api_json_async
@@ -40,6 +41,24 @@ def _need_admin(update: Update) -> bool:
 
 def _err(st: int, data) -> str:
     return api_error_text("operar comando admin", st, data)
+
+
+def _actor(update: Update) -> str:
+    user = update.effective_user
+    return str(user.id) if user else ""
+
+
+async def _edit_tool_message(query, text: str, *, parse_mode: str | None = None, reply_markup=None):
+    try:
+        if query.message and query.message.photo:
+            await query.edit_message_caption(caption=text, parse_mode=parse_mode, reply_markup=reply_markup)
+        else:
+            await query.edit_message_text(text, parse_mode=parse_mode, reply_markup=reply_markup)
+    except BadRequest as exc:
+        if "Message is not modified" in str(exc):
+            return
+        if query.message:
+            await query.message.reply_text(text, parse_mode=parse_mode, reply_markup=reply_markup)
 
 
 async def dm_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -107,20 +126,51 @@ async def admin_tools_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.answer("Cancelado.")
         await query.edit_message_text("Acción cancelada.")
         return
-    st, data = await _api_async("/internal/admin/user-action", method="POST", payload={"ID_TG": target, "action": action})
+    actor = str(query.from_user.id)
+    if action == "registerban":
+        st, data = await _api_async(
+            "/internal/admin/register-ban",
+            method="POST",
+            payload={"ID_TG": target, "actor": actor},
+        )
+        if st == 200 and (data or {}).get("status") == "ok":
+            await query.answer("Registrado y baneado.")
+            await _edit_tool_message(
+                query,
+                f"Usuario <code>{html.escape(target)}</code> registrado y baneado.",
+                parse_mode="HTML",
+            )
+        else:
+            await query.answer("Error.", show_alert=True)
+            await _edit_tool_message(query, _err(st, data), parse_mode="HTML")
+        return
+
+    st, data = await _api_async(
+        "/internal/admin/user-action",
+        method="POST",
+        payload={"ID_TG": target, "action": action, "actor": actor},
+    )
     if st == 200 and (data or {}).get("status") == "ok":
         await query.answer("Actualizado.")
-        await query.edit_message_text(f"Usuario {target} actualizado: {(data or {}).get('estado')}.")
+        await _edit_tool_message(query, f"Usuario {target} actualizado: {(data or {}).get('estado')}.")
     elif st == 404 and "usuario" in str((data or {}).get("message", "")).lower():
         await query.answer("Usuario no registrado.", show_alert=True)
-        await query.edit_message_text(
+        keyboard = InlineKeyboardMarkup(
+            [[
+                InlineKeyboardButton("Registrar y banear", callback_data=f"admintool:registerban:{target}"),
+                InlineKeyboardButton("Cancelar", callback_data=f"admintool:cancel:{target}"),
+            ]]
+        )
+        await _edit_tool_message(
+            query,
             f"⚠️ Usuario <code>{html.escape(target)}</code> no encontrado.\n\n"
-            "Ese ID debe usar <b>/register</b> primero para poder banear/desbanear.",
+            "Puedes registrarlo en la DB y dejarlo baneado al instante.",
             parse_mode="HTML",
+            reply_markup=keyboard,
         )
     else:
         await query.answer("Error.", show_alert=True)
-        await query.edit_message_text(_err(st, data), parse_mode="HTML")
+        await _edit_tool_message(query, _err(st, data), parse_mode="HTML")
 
 
 async def user_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -3,6 +3,7 @@ import json
 import sqlite3
 import time
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from storage import db_path
 from comandos.utils import (
@@ -148,9 +149,9 @@ def _build_buy_text(bot_arroba: str, section: str = "all") -> str:
     credit_items = sum(len(group.get("items") or []) for group in groups.get("credits", []))
     day_items = sum(len(group.get("items") or []) for group in groups.get("days", []))
     parts = [
-        "💎 <b>NEXORA STORE</b>",
-        f"⚡ <b>{bot_arroba}</b> · acceso premium y créditos al instante",
-        f"📦 Catálogo activo: <code>{credit_items}</code> paquetes de créditos · <code>{day_items}</code> paquetes por días",
+        "<b>NEXORA STORE</b>",
+        f"<b>{bot_arroba}</b> · paquetes activos y vendedores autorizados",
+        f"Catalogo: <code>{credit_items}</code> paquetes de creditos · <code>{day_items}</code> planes por dias",
     ]
 
     show_credits = section in {"all", "credits"}
@@ -158,7 +159,7 @@ def _build_buy_text(bot_arroba: str, section: str = "all") -> str:
 
     if show_credits:
         parts.append("")
-        parts.append("💰 <b>Créditos para consultas</b>")
+        parts.append("<b>Creditos para consultas</b>")
         parts.append("")
         if groups["credits"]:
             for group in groups["credits"]:
@@ -167,12 +168,12 @@ def _build_buy_text(bot_arroba: str, section: str = "all") -> str:
                     parts.append(f"  └ {item}")
                 parts.append("")
         else:
-            parts.append("⚠️ Aún no hay paquetes de créditos configurados.")
+            parts.append("Aun no hay paquetes de creditos configurados.")
             parts.append("")
 
     if show_days:
         parts.append("")
-        parts.append("⏳ <b>Planes por tiempo</b>")
+        parts.append("<b>Planes por tiempo</b>")
         parts.append("")
         if groups["days"]:
             for group in groups["days"]:
@@ -181,12 +182,12 @@ def _build_buy_text(bot_arroba: str, section: str = "all") -> str:
                     parts.append(f"  └ {item}")
                 parts.append("")
         else:
-            parts.append("⚠️ Aún no hay planes por días configurados.")
+            parts.append("Aun no hay planes por dias configurados.")
             parts.append("")
 
-    parts.append("🛡️ <b>Antes de comprar</b> revisa /terminos")
+    parts.append("<b>Antes de comprar</b> revisa /terminos")
     parts.append("")
-    parts.append("👇 Elige un vendedor autorizado para completar tu compra.")
+    parts.append("Elige un vendedor autorizado para completar tu compra.")
     return "\n".join(parts).strip()
 
 
@@ -194,8 +195,8 @@ def _build_buy_keyboard(settings: dict) -> InlineKeyboardMarkup:
     rows = [
         [
             InlineKeyboardButton("Todos", callback_data="buy:all"),
-            InlineKeyboardButton("Créditos", callback_data="buy:credits"),
-            InlineKeyboardButton("Días", callback_data="buy:days"),
+            InlineKeyboardButton("Creditos", callback_data="buy:credits"),
+            InlineKeyboardButton("Dias", callback_data="buy:days"),
         ]
     ]
 
@@ -203,7 +204,7 @@ def _build_buy_keyboard(settings: dict) -> InlineKeyboardMarkup:
     owner_text = settings.get("BT_OWNER") or cfg.get("BT_OWNER") or DEFAULT_OWNER_TEXT
     owner_link = settings.get("OWNER_LINK") or cfg.get("OWNER_LINK") or DEFAULT_OWNER_LINK
     if non_empty(owner_text) and non_empty(owner_link):
-        buttons.append(btn(f"[❄️] {owner_text}", owner_link))
+        buttons.append(btn(owner_text, owner_link))
 
     sellers = [
         (settings.get("BT_SELLER") or cfg.get("BT_SELLER"), settings.get("SELLER_LINK") or cfg.get("SELLER_LINK")),
@@ -213,7 +214,7 @@ def _build_buy_keyboard(settings: dict) -> InlineKeyboardMarkup:
     ]
     for text, url in sellers:
         if non_empty(text) and non_empty(url):
-            buttons.append(btn(f"[❄️] {text}", url))
+            buttons.append(btn(text, url))
 
     for i in range(0, len(buttons), 2):
         rows.append(buttons[i:i + 2])
@@ -275,7 +276,14 @@ async def buy_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_arroba = f"@{me.username}" if non_empty(me.username) else "bot"
     texto = _build_buy_text(bot_arroba, section=section)
     keyboard = _build_buy_keyboard(_get_panel_settings())
-    if query.message and query.message.photo:
-        await query.message.edit_caption(caption=texto, parse_mode="HTML", reply_markup=keyboard)
-    elif query.message:
-        await query.message.edit_text(text=texto, parse_mode="HTML", reply_markup=keyboard)
+    if not query.message:
+        return
+    try:
+        if query.message.photo:
+            await query.message.edit_caption(caption=texto, parse_mode="HTML", reply_markup=keyboard)
+        else:
+            await query.message.edit_text(text=texto, parse_mode="HTML", reply_markup=keyboard)
+    except BadRequest as exc:
+        if "Message is not modified" in str(exc):
+            return
+        await query.message.reply_text(text=texto, parse_mode="HTML", reply_markup=keyboard)

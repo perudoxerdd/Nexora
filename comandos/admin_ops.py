@@ -131,11 +131,11 @@ def _badge(text: str) -> str:
     return f"<code>{html.escape(str(text))}</code>"
 
 
-def _operate(endpoint: str, target_id: str, oper: str, cantidad: int) -> Tuple[int, dict]:
+def _operate(endpoint: str, target_id: str, oper: str, cantidad: int, actor: int | str = "") -> Tuple[int, dict]:
     return fetch_api_json(
         endpoint,
         method="POST",
-        payload={"ID_TG": target_id, "operacion": oper, "cantidad": cantidad},
+        payload={"ID_TG": target_id, "operacion": oper, "cantidad": cantidad, "actor": str(actor or "")},
     )
 
 
@@ -171,30 +171,30 @@ async def _notify_admin_purchase(context: ContextTypes.DEFAULT_TYPE, *, target_i
             pass
 
 
-def _set_antispam(id_tg: str, valor: int) -> Tuple[int, dict]:
+def _set_antispam(id_tg: str, valor: int, actor: int | str = "") -> Tuple[int, dict]:
     return fetch_api_json(
         ANTISPAM_ENDPOINT,
         timeout=12,
         method="POST",
-        payload={"ID_TG": id_tg, "valor": valor},
+        payload={"ID_TG": id_tg, "valor": valor, "actor": str(actor or "")},
     )
 
 
-def _do_plan_update_if_provided(target_id: str, plan_txt: str | None) -> tuple[bool, str, int | None]:
+def _do_plan_update_if_provided(target_id: str, plan_txt: str | None, actor: int | str = "") -> tuple[bool, str, int | None]:
     if not plan_txt:
         return True, "—", None
 
     st, js = fetch_api_json(
         PLAN_ENDPOINT,
         method="POST",
-        payload={"ID_TG": target_id, "plan": plan_txt},
+        payload={"ID_TG": target_id, "plan": plan_txt, "actor": str(actor or "")},
     )
     if st != 200:
         return False, f"code {st}: {js.get('message', 'error')}", None
 
     anti = PLAN_TO_ANTISPAM.get(plan_txt)
     if anti is not None:
-        _set_antispam(target_id, anti)
+        _set_antispam(target_id, anti, actor=actor)
     return True, plan_txt, anti
 
 
@@ -312,7 +312,7 @@ async def _handle_cred_like(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             )
             return
 
-    plan_ok, plan_msg, anti_val = _do_plan_update_if_provided(target_id, plan_txt)
+    plan_ok, plan_msg, anti_val = _do_plan_update_if_provided(target_id, plan_txt, actor=caller.id)
     if not plan_ok:
         await msg.reply_text(
             _err_card(f"{BOT_BRAND} • No se pudo actualizar el plan", [plan_msg]),
@@ -321,7 +321,7 @@ async def _handle_cred_like(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         )
         return
 
-    st, js = _operate(CRED_ENDPOINT, target_id, oper, cantidad)
+    st, js = _operate(CRED_ENDPOINT, target_id, oper, cantidad, actor=caller.id)
     if st != 200:
         await msg.reply_text(
             _err_card(f"{BOT_BRAND} • Fallo al operar créditos", [f"Código: {st}", str(js.get("message", "Error"))]),
@@ -412,7 +412,7 @@ async def _handle_sub_like(update: Update, context: ContextTypes.DEFAULT_TYPE, o
             )
             return
 
-    plan_ok, plan_msg, anti_val = _do_plan_update_if_provided(target_id, plan_txt)
+    plan_ok, plan_msg, anti_val = _do_plan_update_if_provided(target_id, plan_txt, actor=caller.id)
     if not plan_ok:
         await msg.reply_text(
             _err_card(f"{BOT_BRAND} • No se pudo actualizar el plan", [plan_msg]),
@@ -421,7 +421,7 @@ async def _handle_sub_like(update: Update, context: ContextTypes.DEFAULT_TYPE, o
         )
         return
 
-    st, js = _operate(SUB_ENDPOINT, target_id, oper, cantidad)
+    st, js = _operate(SUB_ENDPOINT, target_id, oper, cantidad, actor=caller.id)
     if st != 200:
         await msg.reply_text(
             _err_card(f"{BOT_BRAND} • Fallo al operar suscripción", [f"Código: {st}", str(js.get("message", "Error"))]),
@@ -511,7 +511,7 @@ async def setrol_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     st, js = fetch_api_json(
         ROL_ENDPOINT,
         method="POST",
-        payload={"ID_TG": target_id, "rol": rol_to},
+        payload={"ID_TG": target_id, "rol": rol_to, "actor": str(caller.id)},
     )
     if st != 200:
         await msg.reply_text(
@@ -589,7 +589,7 @@ async def setantispam_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
 
-    st, js = _set_antispam(id_tg, val)
+    st, js = _set_antispam(id_tg, val, actor=caller.id)
     if st != 200:
         await msg.reply_text(
             _err_card(f"{BOT_BRAND} • No se pudo actualizar anti-spam", [f"Código: {st}", str(js.get("message", "Error"))]),

@@ -5,6 +5,7 @@ import math
 import sqlite3
 import time
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from storage import db_path
 from comandos.utils import default_asset_url, fetch_api_json
@@ -389,10 +390,9 @@ def _home_caption(cfg: dict, user) -> str:
     nombre = html.escape(user.first_name or "Usuario")
     link = _user_link(user)
     return (
-        f"<b>{bot_name} CENTRO DE COMANDOS</b>\n\n"
-        f"👋 Hola, <a href=\"{link}\">{nombre}</a>\n\n"
-        "🧭 Elige una categoría y encuentra rápido la consulta que necesitas.\n"
-        "⚡ Cada comando muestra ejemplo, costo y estado en tiempo real."
+        f"<b>{bot_name} COMANDOS</b>\n\n"
+        f"Hola, <a href=\"{link}\">{nombre}</a>.\n"
+        "Elige una categoria para ver uso, plan requerido y costo."
     )
 
 
@@ -405,15 +405,14 @@ def _category_caption(cfg: dict, category: dict, commands: list[dict], page: int
     items = commands[start:end]
 
     lines = [
-        f"<b>{bot_name}</b> <i>CATÁLOGO ACTIVO</i>",
-        f"🏷️ <b>Categoría</b> ⇒ <code>{html.escape(category['name'])} {_category_icon(category)}</code>",
-        f"🧩 <b>Comandos</b> ⇒ <code>{total_commands}</code> disponibles",
-        f"📖 <b>Página</b> ⇒ <code>{page}/{total_pages}</code>",
+        f"<b>{bot_name}</b> <i>CATALOGO</i>",
+        f"<b>Categoria:</b> <code>{html.escape(category['name'])}</code>",
+        f"<b>Comandos:</b> <code>{total_commands}</code> · <b>Pagina:</b> <code>{page}/{total_pages}</code>",
         "",
     ]
 
     if not items:
-        lines.append("⚠️ Esta categoría todavía no tiene comandos activos.")
+        lines.append("Esta categoria todavia no tiene comandos activos.")
         return "\n".join(lines)
 
     for cmd in items:
@@ -422,13 +421,11 @@ def _category_caption(cfg: dict, category: dict, commands: list[dict], page: int
         desc = cmd.get("description") or fallback.get("description") or "Sin descripción."
         is_active = bool(cmd.get("is_active"))
         lines.extend([
-            f"🔹 <b>{html.escape(cmd['name'])}</b>",
-            "┈┈┈┈┈┈┈┈┈┈",
-            f"{'🟢' if is_active else '🔴'} <b>Estado</b> ⇒ <b>{'ACTIVO' if is_active else 'INACTIVO'}</b>",
-            f"💎 <b>Plan</b> ⇒ <code>{html.escape(_command_plan_label(cmd))}</code>",
-            f"⌨️ <b>Uso</b> ⇒ <code>{html.escape(usage)}</code>",
-            f"💳 <b>Costo</b> ⇒ <code>{int(cmd['cost'])} créditos</code>",
-            f"📌 <b>Detalle</b> ⇒ <i>{html.escape(desc)}</i>",
+            f"<b>{html.escape(cmd['name'])}</b>",
+            f"Estado: <b>{'ACTIVO' if is_active else 'INACTIVO'}</b> · Plan: <code>{html.escape(_command_plan_label(cmd))}</code>",
+            f"Uso: <code>{html.escape(usage)}</code>",
+            f"Costo: <code>{int(cmd['cost'])} creditos</code>",
+            f"<i>{html.escape(desc)}</i>",
             "",
         ])
 
@@ -469,9 +466,14 @@ async def _send_or_edit_menu(message_or_query, text: str, markup, image_url: str
     message = query.message if edit else message_or_query
     if edit:
         try:
-            await query.edit_message_caption(caption=text, parse_mode="HTML", reply_markup=markup)
-        except Exception:
-            await query.edit_message_text(text=text, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
+            if message and message.photo:
+                await query.edit_message_caption(caption=text, parse_mode="HTML", reply_markup=markup)
+            else:
+                await query.edit_message_text(text=text, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
+        except BadRequest as exc:
+            if "Message is not modified" in str(exc):
+                return
+            await message.reply_text(text=text, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
         return
 
     if image_url:
@@ -571,12 +573,21 @@ async def cmds_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         matches = _search_commands(query_text)
         total_pages = max(1, math.ceil(max(1, len(matches)) / SEARCH_PAGE_SIZE))
         page = min(page, total_pages)
-        await query.edit_message_text(
-            text=_search_caption(cfg, query_text, matches, page=page),
-            parse_mode="HTML",
-            reply_markup=_kb_search_nav(query_text, page, total_pages),
-            disable_web_page_preview=True,
-        )
+        text = _search_caption(cfg, query_text, matches, page=page)
+        markup = _kb_search_nav(query_text, page, total_pages)
+        try:
+            if query.message and query.message.photo:
+                await query.edit_message_caption(caption=text, parse_mode="HTML", reply_markup=markup)
+            else:
+                await query.edit_message_text(
+                    text=text,
+                    parse_mode="HTML",
+                    reply_markup=markup,
+                    disable_web_page_preview=True,
+                )
+        except BadRequest as exc:
+            if "Message is not modified" not in str(exc) and query.message:
+                await query.message.reply_text(text=text, parse_mode="HTML", reply_markup=markup, disable_web_page_preview=True)
         await query.answer()
         return
 

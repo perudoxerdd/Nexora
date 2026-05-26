@@ -135,6 +135,13 @@
         · <a href="{{ url_for('admin_panel', section='sistema') }}">Ver logs</a>
       </div>
       {% endif %}
+      {% if health_summary.runtime.last_polling_conflict %}
+      <div class="flash alert-card">
+        <strong>Alerta Telegram polling:</strong>
+        se detectó otro proceso usando el mismo token.
+        <span class="small">Último conflicto: {{ health_summary.runtime.last_polling_conflict }}</span>
+      </div>
+      {% endif %}
       <p class="small">Panel privado NEXORA conectado a tu entorno de producción.</p>
       <div class="subnav">
         {% for nav in panel_nav_items[:9] %}
@@ -1490,6 +1497,19 @@
         {% endif %}
         {% if active_section == 'sistema' %}
         <div class="section-grid">
+          <div class="card">
+            <h2>Estado del bot</h2>
+            <div class="summary" style="margin-bottom:14px;">
+              <div class="metric"><span class="pill">Web</span><h3>{% if health_summary.runtime.web_online %}Online{% else %}Off{% endif %}</h3><div class="small">API Flask</div></div>
+              <div class="metric"><span class="pill">Worker</span><h3>{% if health_summary.runtime.worker_online %}Online{% else %}Sin señal{% endif %}</h3><div class="small">{{ health_summary.runtime.last_worker_seen or 'sin heartbeat' }}</div></div>
+              <div class="metric"><span class="pill">Volumen</span><h3 style="font-size:18px;">{{ health_summary.runtime.data_volume or '—' }}</h3><div class="small">Datos persistentes</div></div>
+              <div class="metric"><span class="pill">Errores</span><h3>{{ health_summary.metrics.errores.ultimos_24h }}</h3><div class="small">Últimas 24h</div></div>
+            </div>
+            <p class="small">API base actual: <code>{{ health_summary.runtime.api_base or 'NO CONFIG' }}</code></p>
+            {% if health_summary.runtime.last_polling_conflict %}
+            <div class="flash alert-card"><strong>Conflicto de polling:</strong> {{ health_summary.runtime.last_polling_conflict }}. Revisa tokens duplicados o servicios viejos encendidos.</div>
+            {% endif %}
+          </div>
           <div class="card">
             <h2>Estado de almacenamiento</h2>
             <p class="small">Directorio de datos: <code>{{ storage.data_dir }}</code></p>

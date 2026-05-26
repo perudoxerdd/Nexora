@@ -6,7 +6,7 @@ import time
 from urllib import parse as _urlparse
 from telegram.error import Conflict
 from telegram.ext import CommandHandler, Application, CallbackQueryHandler, MessageHandler, filters
-from comandos.utils import API_BASE as API_DB_BASE, fetch_json_url
+from comandos.utils import API_BASE as API_DB_BASE, fetch_api_json, fetch_json_url
 
 from comandos.start import start_command
 from comandos.buy import buy_command, buy_callback
@@ -28,6 +28,7 @@ from comandos import admin_requests
 from comandos.manual_catalog import manual_catalog_command
 from comandos.request_catalog import REQUEST_COMMANDS, make_request_command
 from comandos.system_ops import status_command, panel_command, backup_command
+from comandos.setup import setup_command
 from comandos.broadcast import global_callback, global_command
 from comandos.helpadmin import admin_menu_callback, admin_menu_command
 from comandos.admin_tools import (
@@ -85,7 +86,9 @@ print(f"API base cargada: {API_DB_BASE}")
 # Memoria del último uso por usuario y comando
 _last_call_ts: dict[tuple[int, str], float] = {}
 _antispam_cache: dict[int, tuple[float, int]] = {}
+_ban_cache: dict[int, tuple[float, bool]] = {}
 ANTISPAM_CACHE_TTL = 30.0
+BANNED_CACHE_TTL = 20.0
 
 def _fetch_json(url: str, timeout: int = 12):
     return fetch_json_url(url, timeout=timeout)
@@ -110,7 +113,20 @@ def _get_antispam_seconds(user_id: int) -> int:
     _antispam_cache[user_id] = (now, antispam)
     return antispam
 
-def anti_spam_guard(handler_coro, cmd_name: str, skip_empty_args: bool = False):
+
+def _is_banned_user(user_id: int) -> bool:
+    if user_id == ADMIN_ID:
+        return False
+    now = time.monotonic()
+    cached = _ban_cache.get(user_id)
+    if cached and now - cached[0] < BANNED_CACHE_TTL:
+        return cached[1]
+    st, js = _fetch_json(f"{API_DB_BASE}/tg_info?ID_TG={_urlparse.quote(str(user_id))}", timeout=10)
+    banned = bool(st == 200 and ((js.get("data") or {}).get("ESTADO") or "").upper() == "BANEADO")
+    _ban_cache[user_id] = (now, banned)
+    return banned
+
+def anti_spam_guard(handler_coro, cmd_name: str, skip_empty_args: bool = False, check_ban: bool = True, use_antispam: bool = False):
     """
     Devuelve un wrapper async que respeta el anti-spam por usuario/command.
     """
@@ -120,6 +136,14 @@ def anti_spam_guard(handler_coro, cmd_name: str, skip_empty_args: bool = False):
             return await handler_coro(update, context)
 
         user_id = update.effective_user.id
+        if check_ban and await asyncio.to_thread(_is_banned_user, user_id):
+            await update.effective_message.reply_text(
+                "Acceso bloqueado: tu cuenta figura como BANEADA.",
+                reply_to_message_id=update.effective_message.message_id,
+            )
+            return
+        if not use_antispam:
+            return await handler_coro(update, context)
         if skip_empty_args and not getattr(context, "args", None):
             return await handler_coro(update, context)
         key = (user_id, cmd_name)
@@ -144,9 +168,22 @@ def anti_spam_guard(handler_coro, cmd_name: str, skip_empty_args: bool = False):
     return _wrapped
 
 
-def add_command_handler(application, command_name: str, handler_coro, use_antispam: bool = False, skip_empty_args_antispam: bool = False):
-    wrapped = anti_spam_guard(handler_coro, command_name, skip_empty_args=skip_empty_args_antispam) if use_antispam else handler_coro
+def add_command_handler(application, command_name: str, handler_coro, use_antispam: bool = False, skip_empty_args_antispam: bool = False, check_ban: bool = True):
+    wrapped = anti_spam_guard(
+        handler_coro,
+        command_name,
+        skip_empty_args=skip_empty_args_antispam,
+        check_ban=check_ban,
+        use_antispam=use_antispam,
+    )
     application.add_handler(CommandHandler(command_name, wrapped))
+
+
+def notify_worker_event(event: str, detail: str = ""):
+    try:
+        fetch_api_json("/internal/admin/worker-event", timeout=8, method="POST", payload={"event": event, "detail": detail, "actor": str(ADMIN_ID or "")})
+    except Exception:
+        pass
 
 
 def register_request_commands(application):
@@ -163,6 +200,7 @@ async def log_worker_error(update, context):
     err = getattr(context, "error", None)
     if isinstance(err, Conflict):
         print("Telegram polling conflict: otra instancia intentó leer updates con el mismo token.")
+        await asyncio.to_thread(notify_worker_event, "polling_conflict", str(err))
         return
     print(f"Worker error: {err!r}")
 
@@ -173,7 +211,7 @@ def _fetch_dynamic_command_slugs() -> list[str]:
         return []
     commands = ((js or {}).get("data") or {}).get("commands") or []
     reserved = {
-        "start", "buy", "me", "register", "terminos", "historial", "compras", "status", "panel", "backup",
+        "start", "buy", "me", "register", "terminos", "historial", "compras", "status", "panel", "backup", "setup",
         "global", "admin", "helpadmin", "dm", "ban", "unban", "user", "ventas", "errores", "setcred", "cred",
         "uncred", "setsub", "sub", "unsub", "setrol", "setantispam", "cmds", "cmdsadmin", "genkey",
         "redeem", "keyslog", "keysinfo", "reply", "pending", "solicitudes", "close", "done", "fail",
@@ -199,16 +237,17 @@ def main():
 
     # Públicos / generales
     add_command_handler(application, "start", start_command)
-    add_command_handler(application, "buy", buy_command)
+    add_command_handler(application, "buy", buy_command, check_ban=False)
     add_command_handler(application, "me", me_command)
-    add_command_handler(application, "register", register_command)
-    add_command_handler(application, "rules", rules_command)
-    add_command_handler(application, "terminos", terminos_command)
+    add_command_handler(application, "register", register_command, check_ban=False)
+    add_command_handler(application, "rules", rules_command, check_ban=False)
+    add_command_handler(application, "terminos", terminos_command, check_ban=False)
     add_command_handler(application, "historial", historial_command, use_antispam=True)
     add_command_handler(application, "compras", compras_command, use_antispam=True)
     add_command_handler(application, "status", status_command)
     add_command_handler(application, "panel", panel_command)
     add_command_handler(application, "backup", backup_command)
+    add_command_handler(application, "setup", setup_command)
     add_command_handler(application, "global", global_command)
     add_command_handler(application, "admin", admin_menu_command)
     add_command_handler(application, "helpadmin", admin_menu_command)
@@ -271,6 +310,7 @@ def main():
     application.add_handler(MessageHandler(filters.ALL, admin_requests.forward_file))
 
     print("Bot started and polling for updates...")
+    notify_worker_event("started", "worker polling started")
     application.run_polling()
 
 if __name__ == '__main__':

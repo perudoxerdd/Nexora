@@ -748,6 +748,11 @@ def log_audit_event(action: str, target: str = "", details: str = "", actor: str
         pass
 
 
+def bot_actor() -> str:
+    actor = str(request_value("actor") or request_value("actor_id") or "").strip()
+    return f"bot:{actor}" if actor else "bot"
+
+
 def log_error_event(exc: Exception):
     global _ERROR_NOTIFY_TS
     try:
@@ -2443,6 +2448,27 @@ def get_health_metrics():
     return metrics
 
 
+def get_runtime_status() -> dict:
+    settings = get_panel_settings()
+    storage = get_storage_snapshot()
+    last_worker_seen = settings.get("WORKER_LAST_SEEN") or ""
+    last_conflict = settings.get("WORKER_LAST_POLLING_CONFLICT") or ""
+    return {
+        "web_online": True,
+        "worker_online": bool(last_worker_seen),
+        "api_base": (
+            os.environ.get("NEXORA_API_BASE")
+            or os.environ.get("SPIDERSYN_API_BASE")
+            or os.environ.get("API_BASE")
+            or os.environ.get("API_DB_BASE")
+            or ""
+        ),
+        "data_volume": storage.get("railway_mount") or storage.get("data_dir") or "",
+        "last_worker_seen": last_worker_seen,
+        "last_polling_conflict": last_conflict,
+    }
+
+
 def backups_dir() -> str:
     path = os.path.join(get_data_dir(), "backups")
     os.makedirs(path, exist_ok=True)
@@ -3035,6 +3061,7 @@ def register():
     if row:
         return jsonify({"status": "error", "exists": True, "message": "El usuario ya está registrado"}), 423
     create_user(id_tg)
+    log_audit_event("bot.user.register", id_tg, "created via /register", actor=bot_actor())
     return jsonify({"status": "ok", "exists": False, "message": "Usuario registrado correctamente"}), 200
 
 @app.route("/tg_info", methods=["GET"])
@@ -3251,6 +3278,7 @@ def cred():
     conn = get_conn(); cur = conn.cursor()
     cur.execute("UPDATE usuarios SET creditos = ? WHERE id_tg = ?", (new_val, id_tg))
     conn.commit(); conn.close()
+    log_audit_event("bot.credits", id_tg, f"oper={oper}; amount={cantidad}; before={current}; after={new_val}", actor=bot_actor())
     return jsonify({"status": "ok", "message": f"Créditos {oper} => {new_val}", "CREDITOS": new_val}), 200
 
 @app.route("/sub", methods=["POST"])
@@ -3305,6 +3333,7 @@ def sub():
     conn = get_conn(); cur = conn.cursor()
     cur.execute("UPDATE usuarios SET fecha_caducidad = ? WHERE id_tg = ?", (new_iso, id_tg))
     conn.commit(); conn.close()
+    log_audit_event("bot.subscription", id_tg, f"oper={oper}; days={dias}; expires={new_iso}", actor=bot_actor())
     return jsonify({"status": "ok", "message": f"Fecha de caducidad {oper}", "FECHA_DE_CADUCIDAD": new_iso}), 200
 
 
@@ -3384,6 +3413,7 @@ def keys_generate():
         created = create_license_keys(tipo, cantidad, usos, total, int(creador_id))
     except RuntimeError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 500
+    log_audit_event("bot.keys.generate", tipo, f"amount={cantidad}; usos={usos}; total={total}; creator={creador_id}", actor=bot_actor())
     return jsonify({
         "status": "ok",
         "message": "Keys generadas correctamente",
@@ -3588,6 +3618,7 @@ def set_plan():
     conn = get_conn(); cur = conn.cursor()
     cur.execute("UPDATE usuarios SET plan = ? WHERE id_tg = ?", (plan, id_tg))
     conn.commit(); conn.close()
+    log_audit_event("bot.plan", id_tg, f"plan={plan}", actor=bot_actor())
     return jsonify({"status": "ok", "message": f"Plan actualizado a {plan}"}), 200
 
 @app.route("/rol_wsp", methods=["POST"])
@@ -3645,6 +3676,7 @@ def set_rol_tg():
     conn = get_conn(); cur = conn.cursor()
     cur.execute("UPDATE usuarios SET rol_tg = ? WHERE id_tg = ?", (rol, id_tg))
     conn.commit(); conn.close()
+    log_audit_event("bot.role", id_tg, f"rol_tg={rol}", actor=bot_actor())
     return jsonify({"status": "ok", "message": f"ROL_TG actualizado a {rol}"}), 200
 
 # -------------------------
@@ -3671,6 +3703,7 @@ def set_antispam():
     conn = get_conn(); cur = conn.cursor()
     cur.execute("UPDATE usuarios SET antispam = ? WHERE id_tg = ?", (val, id_tg))
     conn.commit(); conn.close()
+    log_audit_event("bot.antispam", id_tg, f"antispam={val}", actor=bot_actor())
     return jsonify({"status": "ok", "message": f"ANTISPAM actualizado a {val}", "ANTISPAM": val}), 200
 
 # -------------------------
@@ -4128,6 +4161,7 @@ def health():
             "message": "Nexora healthcheck",
             "storage": storage,
             "metrics": metrics,
+            "runtime": get_runtime_status(),
             "time": now_iso(),
         }
     ), 200
@@ -4175,6 +4209,22 @@ def bot_catalog():
     ), 200
 
 
+@app.route("/internal/admin/worker-event", methods=["POST"])
+def internal_admin_worker_event():
+    auth_error = require_internal_access()
+    if auth_error:
+        return auth_error
+    event = str(request_value("event") or "").strip().lower()
+    detail = str(request_value("detail") or "").strip()
+    now = now_iso()
+    save_panel_setting_value("WORKER_LAST_SEEN", now)
+    save_panel_setting_value("WORKER_LAST_EVENT", event or "heartbeat")
+    if event == "polling_conflict":
+        save_panel_setting_value("WORKER_LAST_POLLING_CONFLICT", now)
+        log_audit_event("worker.polling_conflict", "telegram", detail[:300], actor=bot_actor())
+    return jsonify({"status": "ok", "event": event or "heartbeat", "time": now}), 200
+
+
 # Templates del panel movidos a templates/admin_panel.html y templates/admin_login.html
 
 @app.route("/admin/panel", methods=["GET"])
@@ -4193,6 +4243,7 @@ def admin_panel():
     categories = get_catalog_categories()
     commands = get_catalog_commands()
     settings = get_panel_settings()
+    health_summary = {"runtime": get_runtime_status(), "metrics": get_health_metrics()}
     buy_packages = get_buy_packages()
     global_q = request.args.get("gq", "")
     global_results = get_global_search_results(global_q)
@@ -4311,6 +4362,7 @@ def admin_panel():
         global_q=global_q,
         global_results=global_results,
         storage=get_storage_snapshot(),
+        health_summary=health_summary,
         daily_backups=get_daily_backups(limit=10),
         panel_role=panel_role,
         panel_user=session.get("panel_user") or PANEL_USER,
@@ -5604,8 +5656,30 @@ def internal_admin_user_action():
     cur.execute("UPDATE usuarios SET estado = ? WHERE id_tg = ?", (estado, id_tg))
     conn.commit()
     conn.close()
-    log_audit_event("bot.user.action", id_tg, action)
+    log_audit_event("bot.user.action", id_tg, action, actor=bot_actor())
     return jsonify({"status": "ok", "message": f"Usuario {id_tg} actualizado", "estado": estado}), 200
+
+
+@app.route("/internal/admin/register-ban", methods=["POST"])
+def internal_admin_register_ban():
+    auth_error = require_internal_access()
+    if auth_error:
+        return auth_error
+    id_tg = str(request_value("ID_TG") or "").strip()
+    if not id_tg or not id_tg.isdigit():
+        return jsonify({"status": "error", "message": "ID_TG inválido"}), 400
+    created = False
+    row = get_user_by_id(id_tg)
+    if not row:
+        create_user(id_tg)
+        created = True
+    conn = get_conn(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("UPDATE usuarios SET estado = 'BANEADO' WHERE id_tg = ?", (id_tg,))
+    conn.commit()
+    conn.close()
+    log_audit_event("bot.user.register_ban", id_tg, f"created={created}", actor=bot_actor())
+    return jsonify({"status": "ok", "message": "Usuario registrado y baneado", "estado": "BANEADO", "created": created}), 200
 
 
 @app.route("/internal/admin/sales-summary", methods=["GET"])

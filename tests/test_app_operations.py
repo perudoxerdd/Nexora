@@ -94,6 +94,37 @@ class AppOperationsTest(unittest.TestCase):
         self.assertEqual(unbanned.status_code, 200)
         self.assertEqual(unbanned.get_json()["estado"], "ACTIVO")
 
+    def test_internal_register_ban_creates_missing_user_banned(self):
+        user_id = self.user_id("05")
+
+        response = self.client.post(
+            "/internal/admin/register-ban",
+            json={"ID_TG": user_id, "actor": "1"},
+            headers=self.headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["created"])
+        self.assertEqual(payload["estado"], "BANEADO")
+
+        info = self.client.get(f"/tg_info?ID_TG={user_id}", headers=self.headers)
+        self.assertEqual(info.status_code, 200)
+        self.assertEqual(info.get_json()["data"]["ESTADO"], "BANEADO")
+
+    def test_worker_event_updates_health_runtime(self):
+        response = self.client.post(
+            "/internal/admin/worker-event",
+            json={"event": "polling_conflict", "detail": "test", "actor": "1"},
+            headers=self.headers,
+        )
+        self.assertEqual(response.status_code, 200)
+
+        health = self.client.get("/health")
+        runtime = health.get_json()["runtime"]
+        self.assertTrue(runtime["worker_online"])
+        self.assertTrue(runtime["last_polling_conflict"])
+
 
 if __name__ == "__main__":
     unittest.main()

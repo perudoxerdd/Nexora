@@ -109,32 +109,30 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     marca_visible = _clean_brand(MARCA or NAME)
     version_line = f" - <code>{VERSION}</code>" if non_empty(VERSION) else ""
     caption = (
-        f"👋 <b>Bienvenido, <a href='tg://user?id={user.id}'>{user.first_name}</a></b>\n\n"
-        f"🚀 Estás dentro de <b>{marca_visible}</b>{version_line}\n"
-        "Tu centro privado para consultas, solicitudes, historial y gestión de acceso.\n\n"
-        "<b>⚡ Accesos rápidos</b>\n"
-        "🪪 /register · Activa tu cuenta\n"
-        "🧭 /cmds · Explora comandos disponibles\n"
-        "📜 /rules · Lee las reglas del grupo\n"
-        "👤 /me · Revisa tu perfil, plan y créditos\n"
-        "💎 /buy · Ver paquetes y vendedores\n\n"
-        "<b>🛡️ Aviso</b>\n"
-        "Usa NEXORA con responsabilidad. Toda consulta queda bajo responsabilidad del usuario."
+        f"<b>{marca_visible}</b>{version_line}\n"
+        f"Hola, <a href='tg://user?id={user.id}'>{user.first_name}</a>.\n\n"
+        "Gestiona tu cuenta, revisa comandos y compra acceso desde Telegram.\n\n"
+        "<b>Accesos rápidos</b>\n"
+        "<code>/register</code> · activar cuenta\n"
+        "<code>/cmds</code> · ver comandos\n"
+        "<code>/me</code> · perfil y créditos\n"
+        "<code>/buy</code> · paquetes y vendedores\n"
+        "<code>/rules</code> · reglas"
     )
 
     # Botones obligatorios
     buttons = []
     if non_empty(GRUPO_LINK):
-        buttons.append(btn(f"[💭] {BT_GRUPO}", GRUPO_LINK))
+        buttons.append(btn(BT_GRUPO, GRUPO_LINK))
     if non_empty(CANAL_LINK):
-        buttons.append(btn(f"[📣] {BT_CANAL}", CANAL_LINK))
+        buttons.append(btn(BT_CANAL, CANAL_LINK))
     if non_empty(OWNER_LINK):
-        buttons.append(btn(f"[❄️] {BT_OWNER}", OWNER_LINK))
+        buttons.append(btn(BT_OWNER, OWNER_LINK))
 
     # Botones opcionales (sellers)
     for text, url in sellers_raw:
         if non_empty(text) and non_empty(url):
-            buttons.append(btn(f"[❄️] {text}", url))
+            buttons.append(btn(text, url))
 
     # Distribuir en filas de 2 botones
     rows = []
