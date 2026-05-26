@@ -10,9 +10,12 @@ def api_error_text(action: str, status: int, data=None) -> str:
     elif status in {401, 403}:
         title = "La API rechazó la solicitud."
         hint = "Revisa que NEXORA_INTERNAL_API_KEY sea igual en web y worker."
+    elif status == 404 and "usuario" in raw.lower() and "no encontrado" in raw.lower():
+        title = "Usuario no encontrado en la base."
+        hint = "Ese ID debe usar /register primero, o verifica que el ID esté bien escrito."
     elif status == 404:
-        title = "La ruta no existe en la API."
-        hint = "Puede faltar deploy o el worker está llamando un endpoint viejo."
+        title = "Recurso no encontrado en la API."
+        hint = raw or "Puede faltar deploy o el worker está llamando un endpoint viejo."
     elif status >= 500:
         title = f"Railway devolvió error {status}."
         hint = "Mira Deploy Logs y la sección Sistema del panel para ver el traceback."

@@ -89,6 +89,15 @@ class UtilsHttpTest(unittest.TestCase):
                 "https://example.test/assets/default/ft%20start.png",
             )
 
+    def test_api_error_text_distinguishes_missing_user(self):
+        from comandos.bot_errors import api_error_text
+
+        text = api_error_text("operar comando admin", 404, {"message": "Usuario no encontrado"})
+
+        self.assertIn("Usuario no encontrado en la base", text)
+        self.assertIn("/register", text)
+        self.assertNotIn("ruta no existe", text)
+
 
 if __name__ == "__main__":
     unittest.main()

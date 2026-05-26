@@ -111,6 +111,13 @@ async def admin_tools_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     if st == 200 and (data or {}).get("status") == "ok":
         await query.answer("Actualizado.")
         await query.edit_message_text(f"Usuario {target} actualizado: {(data or {}).get('estado')}.")
+    elif st == 404 and "usuario" in str((data or {}).get("message", "")).lower():
+        await query.answer("Usuario no registrado.", show_alert=True)
+        await query.edit_message_text(
+            f"⚠️ Usuario <code>{html.escape(target)}</code> no encontrado.\n\n"
+            "Ese ID debe usar <b>/register</b> primero para poder banear/desbanear.",
+            parse_mode="HTML",
+        )
     else:
         await query.answer("Error.", show_alert=True)
         await query.edit_message_text(_err(st, data), parse_mode="HTML")
