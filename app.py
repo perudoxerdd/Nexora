@@ -2462,7 +2462,8 @@ def get_runtime_status() -> dict:
     ).strip().rstrip("/")
     if not current_api_base:
         try:
-            current_api_base = request.url_root.rstrip("/")
+            proto = request.headers.get("X-Forwarded-Proto") or request.scheme or "https"
+            current_api_base = f"{proto}://{request.host}".rstrip("/")
         except Exception:
             current_api_base = ""
     return {
